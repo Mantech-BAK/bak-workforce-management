@@ -39,12 +39,25 @@ export async function getAuditLogs(): Promise<AuditLogEntry[]> {
 }
 
 export function computeStats(employees: Employee[]): DashboardStats {
+  const departmentCounts = new Map<string, number>();
+  const statusCounts = new Map<string, number>();
+  for (const e of employees) {
+    const dept = e.department || 'Unassigned';
+    departmentCounts.set(dept, (departmentCounts.get(dept) || 0) + 1);
+    const status = e.status || 'unknown';
+    statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+  }
+
   return {
+    totalEmployees: employees.length,
     activeEmployees: employees.filter((e) => e.status === 'active').length,
-    insideGeofence: employees.filter((e) => e.gps === 'inside').length,
-    outsideGeofence: employees.filter((e) => e.gps === 'outside').length,
-    gpsDisabled: employees.filter((e) => e.gps === 'disabled').length,
-    missingPunchOut: employees.filter((e) => e.attendance === 'missing_punch_out').length,
+    otEligible: employees.filter((e) => e.ot_eligible === 'YES').length,
+    departmentCounts: Array.from(departmentCounts.entries())
+      .map(([department, count]) => ({ department, count }))
+      .sort((a, b) => b.count - a.count),
+    statusCounts: Array.from(statusCounts.entries())
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => b.count - a.count),
   };
 }
 

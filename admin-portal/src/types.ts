@@ -1,20 +1,28 @@
-export type EmployeeStatus = 'active' | 'inactive' | 'suspended';
-export type GpsState = 'inside' | 'outside' | 'disabled';
-export type AttendanceState = 'clocked_in' | 'clocked_out' | 'missing_punch_out';
-
+// Mirrors the exact field names returned by GET /api/employees. Status is free-text
+// on the backend (varchar, default 'active') rather than a fixed enum, and there is
+// no gps/attendance/lastSeen/avatar data — those come from the attendance table, not
+// the employee record, and are not merged into this endpoint.
 export interface Employee {
-  id: string;
+  id: number;
+  emp_id: string;
+  cpr: string | null;
   name: string;
-  email: string;
-  phone: string;
-  department: string;
-  role: string;
-  status: EmployeeStatus;
-  gps: GpsState;
-  attendance: AttendanceState;
-  avatarUrl: string;
-  lastSeen: string;
-  site: string;
+  designation: string | null;
+  cost_center: string | null;
+  phone: string | null;
+  status: string | null;
+  nationality: string | null;
+  joining_date: string | null;
+  company: string | null;
+  department: string | null;
+  office_shift: string | null;
+  ot_eligible: string | null;
+  cr_name: string | null;
+  cr_number: string | null;
+  reporting_manager: string | null;
+  zk_is_active: boolean | null;
+  zk_hire_date: string | null;
+  created_at: string;
 }
 
 export interface AuditLogEntry {
@@ -28,11 +36,11 @@ export interface AuditLogEntry {
 }
 
 export interface DashboardStats {
+  totalEmployees: number;
   activeEmployees: number;
-  insideGeofence: number;
-  outsideGeofence: number;
-  gpsDisabled: number;
-  missingPunchOut: number;
+  otEligible: number;
+  departmentCounts: { department: string; count: number }[];
+  statusCounts: { status: string; count: number }[];
 }
 
 export type AttendanceView = 'daily' | 'monthly' | 'employee-wise' | 'site-wise';

@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Users, Filter, RefreshCw, ChevronDown } from 'lucide-react';
-import type { Employee, EmployeeStatus } from '../types';
+import type { Employee } from '../types';
 import { getEmployees } from '../data/api';
-import { AttendanceBadge, GpsBadge, StatusBadge, formatRelative } from '../components/Badges';
-
-type StatusFilter = 'all' | EmployeeStatus;
+import { StatusBadge } from '../components/Badges';
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('all');
-  const [status, setStatus] = useState<StatusFilter>('all');
+  const [status, setStatus] = useState('all');
 
   useEffect(() => {
     getEmployees().then((data) => {
@@ -21,7 +19,11 @@ export default function EmployeesPage() {
   }, []);
 
   const departments = useMemo(() => {
-    return Array.from(new Set(employees.map((e) => e.department))).sort();
+    return Array.from(new Set(employees.map((e) => e.department).filter((d): d is string => Boolean(d)))).sort();
+  }, [employees]);
+
+  const statuses = useMemo(() => {
+    return Array.from(new Set(employees.map((e) => e.status).filter((s): s is string => Boolean(s)))).sort();
   }, [employees]);
 
   const filtered = useMemo(() => {
@@ -30,7 +32,11 @@ export default function EmployeesPage() {
       if (status !== 'all' && e.status !== status) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
-        return e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q) || e.id.toLowerCase().includes(q);
+        return (
+          e.name.toLowerCase().includes(q) ||
+          e.emp_id.toLowerCase().includes(q) ||
+          (e.cpr ?? '').toLowerCase().includes(q)
+        );
       }
       return true;
     });
@@ -67,7 +73,7 @@ export default function EmployeesPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, email, or ID..."
+              placeholder="Search by name, employee ID, or CPR..."
               className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-700 placeholder-slate-400 outline-none transition-colors focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/10"
             />
           </div>
@@ -90,13 +96,13 @@ export default function EmployeesPage() {
           <div className="relative">
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as StatusFilter)}
+              onChange={(e) => setStatus(e.target.value)}
               className="appearance-none rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-3 pr-9 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-emerald-400 focus:bg-white"
             >
               <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="suspended">Suspended</option>
+              {statuses.map((s) => (
+                <option key={s} value={s} className="capitalize">{s}</option>
+              ))}
             </select>
             <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
@@ -121,33 +127,28 @@ export default function EmployeesPage() {
                 <tr>
                   <th className="px-6 py-3 font-medium">Employee</th>
                   <th className="px-6 py-3 font-medium">Department</th>
-                  <th className="px-6 py-3 font-medium">Role</th>
-                  <th className="px-6 py-3 font-medium">Site</th>
+                  <th className="px-6 py-3 font-medium">Designation</th>
+                  <th className="px-6 py-3 font-medium">Cost Center</th>
                   <th className="px-6 py-3 font-medium">Status</th>
-                  <th className="px-6 py-3 font-medium">GPS</th>
-                  <th className="px-6 py-3 font-medium">Attendance</th>
-                  <th className="px-6 py-3 font-medium">Last Seen</th>
+                  <th className="px-6 py-3 font-medium">Nationality</th>
+                  <th className="px-6 py-3 font-medium">Phone</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map((emp) => (
                   <tr key={emp.id} className="transition-colors hover:bg-slate-50">
                     <td className="px-6 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <img src={emp.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
-                        <div>
-                          <p className="font-medium text-slate-700">{emp.name}</p>
-                          <p className="text-xs text-slate-400">{emp.email}</p>
-                        </div>
+                      <div>
+                        <p className="font-medium text-slate-700">{emp.name}</p>
+                        <p className="text-xs text-slate-400">{emp.emp_id}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-3.5 text-slate-600">{emp.department}</td>
-                    <td className="px-6 py-3.5 text-slate-600">{emp.role}</td>
-                    <td className="px-6 py-3.5 text-slate-600">{emp.site}</td>
+                    <td className="px-6 py-3.5 text-slate-600">{emp.department || '—'}</td>
+                    <td className="px-6 py-3.5 text-slate-600">{emp.designation || '—'}</td>
+                    <td className="px-6 py-3.5 text-slate-600">{emp.cost_center || '—'}</td>
                     <td className="px-6 py-3.5"><StatusBadge status={emp.status} /></td>
-                    <td className="px-6 py-3.5"><GpsBadge state={emp.gps} /></td>
-                    <td className="px-6 py-3.5"><AttendanceBadge state={emp.attendance} /></td>
-                    <td className="px-6 py-3.5 text-slate-500">{formatRelative(emp.lastSeen)}</td>
+                    <td className="px-6 py-3.5 text-slate-600">{emp.nationality || '—'}</td>
+                    <td className="px-6 py-3.5 text-slate-500">{emp.phone || '—'}</td>
                   </tr>
                 ))}
               </tbody>
