@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import EmployeesPage from './pages/EmployeesPage';
 import EnrollmentLogPage from './pages/EnrollmentLogPage';
+import AttendancePage from './pages/AttendancePage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import type { PageId } from './navigation';
 
@@ -23,7 +24,7 @@ function Portal() {
       content = <EmployeesPage />;
       break;
     case 'attendance':
-      content = <PlaceholderPage icon="attendance" title="Attendance" description="Track clock-in and clock-out events, view timesheets, and manage attendance corrections across your workforce." />;
+      content = <AttendancePage />;
       break;
     case 'tasks':
       content = <PlaceholderPage icon="tasks" title="Tasks" description="Assign, monitor, and complete field tasks. Track progress and completion rates by team or individual." />;
