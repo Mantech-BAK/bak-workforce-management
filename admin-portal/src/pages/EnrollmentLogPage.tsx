@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { UserPlus, Smartphone, Fingerprint, Clock, RefreshCw, Search } from 'lucide-react';
+import { UserPlus, Fingerprint, Clock, RefreshCw, Search } from 'lucide-react';
 import type { AuditLogEntry } from '../types';
 import { getAuditLogs } from '../data/api';
 
@@ -10,7 +10,7 @@ export default function EnrollmentLogPage() {
 
   useEffect(() => {
     getAuditLogs().then((data) => {
-      setLogs(data.filter((l) => l.event_type === 'face_self_enrolled'));
+      setLogs(data);
       setLoading(false);
     });
   }, []);
@@ -19,17 +19,14 @@ export default function EnrollmentLogPage() {
     if (!search.trim()) return logs;
     const q = search.toLowerCase();
     return logs.filter(
-      (l) =>
-        l.actor_name.toLowerCase().includes(q) ||
-        l.actor_id.toLowerCase().includes(q) ||
-        l.metadata.device?.toLowerCase().includes(q),
+      (l) => l.employee_name.toLowerCase().includes(q) || l.actor.toLowerCase().includes(q),
     );
   }, [logs, search]);
 
   const reload = () => {
     setLoading(true);
     getAuditLogs().then((data) => {
-      setLogs(data.filter((l) => l.event_type === 'face_self_enrolled'));
+      setLogs(data);
       setLoading(false);
     });
   };
@@ -58,7 +55,7 @@ export default function EnrollmentLogPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by employee name, ID, or device..."
+            placeholder="Search by employee name or ID..."
             className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-700 placeholder-slate-400 outline-none transition-colors focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/10"
           />
         </div>
@@ -86,23 +83,16 @@ export default function EnrollmentLogPage() {
 
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-slate-800">{log.actor_name}</span>
-                  <span className="text-xs text-slate-400">({log.actor_id})</span>
+                  <span className="font-semibold text-slate-800">{log.employee_name}</span>
+                  <span className="text-xs text-slate-400">({log.actor})</span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
                     <UserPlus size={11} /> Self-Enrolled
                   </span>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
                   <span className="flex items-center gap-1.5">
-                    <Smartphone size={13} className="text-slate-400" />
-                    {log.metadata.device ?? 'Unknown device'}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="font-mono text-slate-400">v{log.metadata.app_version ?? '—'}</span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
                     <Fingerprint size={13} className="text-slate-400" />
-                    {log.metadata.template_count ?? '0'} face templates
+                    Employee record #{log.entity_id}
                   </span>
                 </div>
               </div>
