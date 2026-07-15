@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "BakWorkforceApp",
+    "slug": "BakWorkforceApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "package": "com.anonymous.BakWorkforceApp"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BAK Workforce needs camera access to verify your identity via face recognition.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ]
+    ]
+  }
+}
