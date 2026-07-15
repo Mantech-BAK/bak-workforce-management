@@ -43,6 +43,23 @@ export interface DashboardStats {
   statusCounts: { status: string; count: number }[];
 }
 
+// Mirrors GET /api/exceptions. 'employee_name' comes from a LEFT JOIN on employees,
+// so it can be null if emp_id doesn't match any employee record. 'status' is
+// free-text on the backend ('open' | 'resolved' in practice, default 'open').
+export interface Exception {
+  id: number;
+  type: string;
+  emp_id: string;
+  employee_name: string | null;
+  ref_table: string | null;
+  ref_id: number | null;
+  details: string | null;
+  status: string;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
 export type AttendanceView = 'daily' | 'monthly' | 'employee-wise' | 'site-wise';
 export type ExportFormat = 'excel' | 'csv' | 'pdf';
 

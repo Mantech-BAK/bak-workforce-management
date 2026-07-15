@@ -8,6 +8,11 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Missing or invalid Authorization header' });
   }
 
+  if (process.env.ADMIN_API_KEY && token === process.env.ADMIN_API_KEY) {
+    req.admin = true;
+    return next();
+  }
+
   try {
     req.employee = jwt.verify(token, process.env.JWT_SECRET);
     return next();

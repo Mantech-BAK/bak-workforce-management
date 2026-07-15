@@ -4,9 +4,10 @@ import type {
   AuditLogEntry,
   DashboardStats,
   Employee,
+  Exception,
   ExportFormat,
 } from '../types';
-import { mockAttendanceRecords, mockAuditLogs, mockEmployees } from './mockData';
+import { mockAttendanceRecords, mockAuditLogs, mockEmployees, mockExceptions } from './mockData';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const REQUEST_TIMEOUT_MS = 3500;
@@ -36,6 +37,39 @@ export async function getEmployees(): Promise<Employee[]> {
 
 export async function getAuditLogs(): Promise<AuditLogEntry[]> {
   return fetchJson<AuditLogEntry[]>('/api/audit-logs/enrollments', mockAuditLogs);
+}
+
+export interface ExceptionFilters {
+  type?: string;
+  status?: string;
+  empId?: string;
+}
+
+export async function getExceptions(filters: ExceptionFilters = {}): Promise<Exception[]> {
+  const params = new URLSearchParams();
+  if (filters.type) params.set('type', filters.type);
+  if (filters.status) params.set('status', filters.status);
+  if (filters.empId) params.set('emp_id', filters.empId);
+  const qs = params.toString();
+  return fetchJson<Exception[]>(`/api/exceptions${qs ? `?${qs}` : ''}`, mockExceptions);
+}
+
+export async function resolveException(
+  id: number,
+  resolvedBy: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!API_BASE_URL) return { ok: true };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/exceptions/${id}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_TOKEN}` },
+      body: JSON.stringify({ resolved_by: resolvedBy }),
+    });
+    if (!res.ok) return { ok: false, error: `Resolve failed: ${res.status}` };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Network error while resolving exception' };
+  }
 }
 
 export function computeStats(employees: Employee[]): DashboardStats {

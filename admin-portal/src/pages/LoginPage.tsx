@@ -78,7 +78,7 @@ export default function LoginPage() {
 
           <div className="mt-6 rounded-lg bg-slate-900/40 px-4 py-3 text-center">
             <p className="text-xs text-slate-500">
-              Demo token: <code className="font-mono text-emerald-400">wf-admin-2026</code>
+              Demo token: <code className="font-mono text-emerald-400">ghbdgklgnodriert9gjndkdklvbnxk</code>
             </p>
           </div>
         </div>

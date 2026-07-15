@@ -18,7 +18,10 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ],
       "package": "com.anonymous.BakWorkforceApp"
     },
@@ -32,6 +35,14 @@
           "cameraPermission": "BAK Workforce needs camera access to verify your identity via face recognition.",
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "BAK Workforce needs your location to record punch-in and punch-out locations.",
+          "locationAlwaysAndWhenInUsePermission": "BAK Workforce needs background location access to verify your location during your shift.",
+          "isAndroidBackgroundLocationEnabled": true
         }
       ]
     ]

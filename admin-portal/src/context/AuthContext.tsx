@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
-const ADMIN_TOKEN = 'wf-admin-2026';
+const ADMIN_TOKEN = 'ghbdgklgnodriert9gjndkdklvbnxk';
 const STORAGE_KEY = 'wf_admin_session';
 
 interface AuthState {

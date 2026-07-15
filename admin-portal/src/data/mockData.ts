@@ -1,4 +1,4 @@
-import type { AttendanceRecord, AuditLogEntry, Employee } from '../types';
+import type { AttendanceRecord, AuditLogEntry, Employee, Exception } from '../types';
 
 export const mockEmployees: Employee[] = [
   { id: 1001, emp_id: 'EMP-1001', cpr: '890123456', name: 'Aisha Khan', designation: 'Site Supervisor', cost_center: 'CC-5001', phone: '+1 415 555 0101', status: 'active', nationality: 'Pakistan', joining_date: '2022-03-01', company: 'Workforce Ltd', department: 'Field Operations', office_shift: 'DAY', ot_eligible: 'YES', cr_name: null, cr_number: null, reporting_manager: 'YUKI TANAKA', zk_is_active: true, zk_hire_date: '2022-03-01', created_at: '2026-07-14T08:42:00Z' },
@@ -69,3 +69,11 @@ export const mockAttendanceRecords: AttendanceRecord[] = attendanceBase.map((r, 
   ...r,
   '#': i + 1,
 }));
+
+export const mockExceptions: Exception[] = [
+  { id: 501, type: 'face_match_failed', emp_id: 'EMP-1004', employee_name: 'Diego Santos', ref_table: 'employees', ref_id: 1004, details: 'similarity=0.4210', status: 'open', resolved_by: null, resolved_at: null, created_at: '2026-07-14T07:32:00Z' },
+  { id: 502, type: 'geofence_violation', emp_id: 'EMP-1006', employee_name: 'Tom Whitfield', ref_table: 'attendance', ref_id: 88, details: 'Punch-in recorded 320m outside assigned geofence', status: 'open', resolved_by: null, resolved_at: null, created_at: '2026-07-14T09:24:00Z' },
+  { id: 503, type: 'gps_disabled', emp_id: 'EMP-1016', employee_name: 'Devon Reed', ref_table: 'attendance', ref_id: 91, details: 'GPS was disabled at time of punch-in', status: 'open', resolved_by: null, resolved_at: null, created_at: '2026-07-14T07:46:00Z' },
+  { id: 504, type: 'missing_punch_out', emp_id: 'EMP-1005', employee_name: 'Hannah Lee', ref_table: 'attendance', ref_id: 76, details: 'No punch-out recorded for shift starting 2026-07-13 09:00', status: 'resolved', resolved_by: 'AMELIA BROOKS', resolved_at: '2026-07-13T20:00:00Z', created_at: '2026-07-13T18:05:00Z' },
+  { id: 505, type: 'face_match_failed', emp_id: 'EMP-1012', employee_name: 'Owen Fitzgerald', ref_table: 'employees', ref_id: 1012, details: 'similarity=0.3877', status: 'resolved', resolved_by: 'DEVON REED', resolved_at: '2026-07-11T09:00:00Z', created_at: '2026-07-11T08:15:00Z' },
+];

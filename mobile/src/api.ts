@@ -68,3 +68,65 @@ export interface TodayTaskCount {
 export function getTodayTaskCount(token: string): Promise<TodayTaskCount | null> {
   return authedGet<TodayTaskCount>('/api/tasks/me/today', token);
 }
+
+export interface Project {
+  project_code: number;
+  project_name: string;
+  project_company_name: string | null;
+}
+
+export function getProjects(token: string): Promise<Project[] | null> {
+  return authedGet<Project[]>('/api/projects', token);
+}
+
+export interface ApiSuccess<T> {
+  ok: true;
+  data: T;
+}
+
+export interface ApiFailure {
+  ok: false;
+  error: string;
+}
+
+async function authedPost<T>(path: string, token: string, body: unknown): Promise<ApiSuccess<T> | ApiFailure> {
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Request failed' };
+    }
+    return { ok: true, data };
+  } catch {
+    return { ok: false, error: 'Network error' };
+  }
+}
+
+export interface PunchInResult {
+  status: 'clocked_in';
+  punch_in_time: string;
+}
+
+export function punchIn(
+  token: string,
+  params: { project_code: number; lat: number; lng: number }
+): Promise<ApiSuccess<PunchInResult> | ApiFailure> {
+  return authedPost<PunchInResult>('/api/attendance/punch-in', token, params);
+}
+
+export interface PunchOutResult {
+  status: 'clocked_out';
+  punch_in_time: string;
+  punch_out_time: string;
+}
+
+export function punchOut(
+  token: string,
+  params: { lat: number; lng: number }
+): Promise<ApiSuccess<PunchOutResult> | ApiFailure> {
+  return authedPost<PunchOutResult>('/api/attendance/punch-out', token, params);
+}
