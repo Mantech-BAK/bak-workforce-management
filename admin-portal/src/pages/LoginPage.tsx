@@ -75,12 +75,6 @@ export default function LoginPage() {
               {!loading && <ArrowRight size={16} />}
             </button>
           </form>
-
-          <div className="mt-6 rounded-lg bg-slate-900/40 px-4 py-3 text-center">
-            <p className="text-xs text-slate-500">
-              Demo token: <code className="font-mono text-emerald-400">ghbdgklgnodriert9gjndkdklvbnxk</code>
-            </p>
-          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-600">
