@@ -69,11 +69,16 @@ router.post('/punch-in', async (req, res) => {
 
   const employee = await pool.query('SELECT cpr FROM employees WHERE emp_id = $1', [req.employee.emp_id]);
 
+  const geofence = await pool.query(
+    `INSERT INTO geofences (center_lat, center_lng) VALUES ($1, $2) RETURNING id`,
+    [lat, lng]
+  );
+
   const { rows } = await pool.query(
-    `INSERT INTO attendance (emp_id, cpr, punch_in_time, punch_in_lat, punch_in_lng, job_project_code, source)
-     VALUES ($1, $2, now(), $3, $4, $5, 'mobile_app')
+    `INSERT INTO attendance (emp_id, cpr, punch_in_time, punch_in_lat, punch_in_lng, job_project_code, geofence_id, source)
+     VALUES ($1, $2, now(), $3, $4, $5, $6, 'mobile_app')
      RETURNING punch_in_time`,
-    [req.employee.emp_id, employee.rows[0]?.cpr || null, lat, lng, project_code]
+    [req.employee.emp_id, employee.rows[0]?.cpr || null, lat, lng, project_code, geofence.rows[0].id]
   );
 
   res.json({ status: 'clocked_in', punch_in_time: rows[0].punch_in_time });
