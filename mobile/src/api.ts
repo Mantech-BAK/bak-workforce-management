@@ -69,6 +69,34 @@ export function getTodayTaskCount(token: string): Promise<TodayTaskCount | null>
   return authedGet<TodayTaskCount>('/api/tasks/me/today', token);
 }
 
+export interface Task {
+  id: number;
+  emp_id: string;
+  task_date: string;
+  location: string | null;
+  description: string | null;
+  priority: string | null;
+  remarks: string | null;
+  status: string;
+  source: string | null;
+  teams_message_id: string | null;
+  created_at: string;
+}
+
+export function getMyTasks(token: string): Promise<Task[] | null> {
+  return authedGet<Task[]>('/api/tasks/me', token);
+}
+
+export type TaskStatus = 'in_progress' | 'completed';
+
+export function updateTaskStatus(
+  token: string,
+  id: number,
+  status: TaskStatus
+): Promise<ApiSuccess<Task> | ApiFailure> {
+  return authedPatch<Task>(`/api/tasks/${id}/status`, token, { status });
+}
+
 export interface Project {
   project_code: number;
   project_name: string;
@@ -93,6 +121,23 @@ async function authedPost<T>(path: string, token: string, body: unknown): Promis
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Request failed' };
+    }
+    return { ok: true, data };
+  } catch {
+    return { ok: false, error: 'Network error' };
+  }
+}
+
+async function authedPatch<T>(path: string, token: string, body: unknown): Promise<ApiSuccess<T> | ApiFailure> {
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     });
