@@ -28,6 +28,33 @@ export async function faceLogin(empId: string, imageBase64: string): Promise<Fac
   }
 }
 
+export interface DevLoginSuccess {
+  ok: true;
+  token: string;
+}
+
+export interface DevLoginFailure {
+  ok: false;
+  error: string;
+}
+
+export async function devLogin(empId: string): Promise<DevLoginSuccess | DevLoginFailure> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/dev-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emp_id: empId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Dev login failed' };
+    }
+    return { ok: true, token: data.token };
+  } catch {
+    return { ok: false, error: 'Network error' };
+  }
+}
+
 async function authedGet<T>(path: string, token: string): Promise<T | null> {
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {

@@ -14,6 +14,32 @@ function issueToken(employee) {
   });
 }
 
+router.post('/dev-login', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  const { emp_id } = req.body;
+  if (!emp_id) {
+    return res.status(400).json({ error: 'emp_id is required' });
+  }
+
+  const { rows } = await pool.query('SELECT id, emp_id FROM employees WHERE emp_id = $1', [emp_id]);
+  const employee = rows[0];
+
+  if (!employee) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  await pool.query(
+    'INSERT INTO audit_logs (actor, action, entity, entity_id) VALUES ($1, $2, $3, $4)',
+    [employee.emp_id, 'dev_login_bypass', 'employees', employee.id]
+  );
+
+  const token = issueToken(employee);
+  return res.json({ token });
+});
+
 router.post('/face-login', async (req, res) => {
   const { emp_id, face_image } = req.body;
 

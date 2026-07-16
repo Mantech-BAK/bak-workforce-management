@@ -1,12 +1,23 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 
-export default function LoginScreen({ onVerify }: { onVerify: (empId: string) => void }) {
+export default function LoginScreen({
+  onVerify,
+  onDevBypass,
+}: {
+  onVerify: (empId: string) => void;
+  onDevBypass?: (empId: string) => void;
+}) {
   const [empId, setEmpId] = useState('');
 
   const handleVerify = () => {
     if (!empId.trim()) return;
     onVerify(empId.trim());
+  };
+
+  const handleDevBypass = () => {
+    if (!empId.trim()) return;
+    onDevBypass?.(empId.trim());
   };
 
   return (
@@ -30,6 +41,15 @@ export default function LoginScreen({ onVerify }: { onVerify: (empId: string) =>
       >
         <Text style={styles.buttonText}>Verify</Text>
       </TouchableOpacity>
+      {__DEV__ && onDevBypass && (
+        <TouchableOpacity
+          style={[styles.devButton, !empId.trim() && styles.buttonDisabled]}
+          onPress={handleDevBypass}
+          disabled={!empId.trim()}
+        >
+          <Text style={styles.devButtonText}>Dev: Skip Face Capture</Text>
+        </TouchableOpacity>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -55,4 +75,14 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.4 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  devButton: {
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderStyle: 'dashed',
+  },
+  devButtonText: { color: '#b45309', fontSize: 14, fontWeight: '600' },
 });

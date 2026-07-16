@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import LoginScreen from './src/screens/LoginScreen';
 import CaptureScreen from './src/screens/CaptureScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import TasksScreen from './src/screens/TasksScreen';
-import { getMe } from './src/api';
+import { devLogin, getMe } from './src/api';
 import { clearToken, loadToken, saveToken } from './src/storage';
 
 type Screen = 'bootstrap' | 'login' | 'capture' | 'home';
@@ -18,6 +18,7 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
+  
     (async () => {
       const stored = await loadToken();
       if (stored) {
@@ -32,10 +33,21 @@ export default function App() {
       setScreen('login');
     })();
   }, []);
-
   const handleVerify = (id: string) => {
     setEmpId(id);
     setScreen('capture');
+  };
+
+  const handleDevBypass = async (id: string) => {
+    const result = await devLogin(id);
+    if (!result.ok) {
+      Alert.alert('Dev Login Failed', result.error);
+      return;
+    }
+    await saveToken(result.token);
+    setEmpId(id);
+    setToken(result.token);
+    setScreen('home');
   };
 
   const handleCaptureSuccess = async (jwt: string) => {
@@ -63,7 +75,9 @@ export default function App() {
   return (
     <>
       <StatusBar style="auto" />
-      {screen === 'login' && <LoginScreen onVerify={handleVerify} />}
+      {screen === 'login' && (
+        <LoginScreen onVerify={handleVerify} onDevBypass={__DEV__ ? handleDevBypass : undefined} />
+      )}
       {screen === 'capture' && (
         <CaptureScreen empId={empId} onSuccess={handleCaptureSuccess} onCancel={() => setScreen('login')} />
       )}
