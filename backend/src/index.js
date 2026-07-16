@@ -14,6 +14,7 @@ const exceptionsRoutes = require('./routes/exceptions');
 const tasksRoutes = require('./routes/tasks');
 const projectsRoutes = require('./routes/projects');
 const geofenceMonitor = require('./jobs/geofenceMonitor');
+const teamsTaskProcessor = require('./jobs/teamsTaskProcessor');
 
 const app = express();
 
@@ -52,4 +53,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
   geofenceMonitor.start();
+  teamsTaskProcessor.start();
 });

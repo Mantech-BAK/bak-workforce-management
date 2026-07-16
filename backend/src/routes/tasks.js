@@ -2,6 +2,7 @@ const express = require('express');
 
 const pool = require('../config/db');
 const { todayLocalDateString } = require('../services/attendanceReport');
+const { processTeamsTasks } = require('../jobs/teamsTaskProcessor');
 
 const router = express.Router();
 
@@ -126,6 +127,15 @@ router.patch('/:id/status', async (req, res) => {
   );
 
   res.json(rows[0]);
+});
+
+router.post('/process-teams', async (req, res) => {
+  try {
+    const summary = await processTeamsTasks();
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
