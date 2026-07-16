@@ -130,3 +130,10 @@ export function punchOut(
 ): Promise<ApiSuccess<PunchOutResult> | ApiFailure> {
   return authedPost<PunchOutResult>('/api/attendance/punch-out', token, params);
 }
+
+export function reportLocation(
+  token: string,
+  params: { lat: number; lng: number }
+): Promise<ApiSuccess<{ ok: true }> | ApiFailure> {
+  return authedPost<{ ok: true }>('/api/attendance/location', token, params);
+}

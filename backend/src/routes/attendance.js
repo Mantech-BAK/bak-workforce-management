@@ -84,6 +84,32 @@ router.post('/punch-in', async (req, res) => {
   res.json({ status: 'clocked_in', punch_in_time: rows[0].punch_in_time });
 });
 
+router.post('/location', async (req, res) => {
+  if (!req.employee) {
+    return res.status(403).json({ error: 'Employee token required' });
+  }
+
+  const { lat, lng } = req.body;
+  if (lat === undefined || lng === undefined) {
+    return res.status(400).json({ error: 'lat and lng are required' });
+  }
+
+  const open = await pool.query(
+    `SELECT id FROM attendance WHERE emp_id = $1 AND punch_out_time IS NULL ORDER BY punch_in_time DESC LIMIT 1`,
+    [req.employee.emp_id]
+  );
+  if (!open.rows[0]) {
+    return res.status(400).json({ error: 'No active punch-in found' });
+  }
+
+  await pool.query(
+    `UPDATE attendance SET last_lat = $1, last_lng = $2, last_reported_at = now() WHERE id = $3`,
+    [lat, lng, open.rows[0].id]
+  );
+
+  res.json({ ok: true });
+});
+
 router.post('/punch-out', async (req, res) => {
   if (!req.employee) {
     return res.status(403).json({ error: 'Employee token required' });

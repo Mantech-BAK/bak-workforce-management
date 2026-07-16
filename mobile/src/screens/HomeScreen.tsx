@@ -22,7 +22,10 @@ import {
   getTodayTaskCount,
   punchIn,
   punchOut,
+  reportLocation,
 } from '../api';
+
+const LOCATION_REPORT_INTERVAL_MS = 75000;
 
 const STATUS_LABEL: Record<PunchStatus['status'], string> = {
   not_started: 'Not Clocked In',
@@ -79,6 +82,18 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
     load().finally(() => setLoading(false));
     requestLocationPermissions();
   }, [load]);
+
+  useEffect(() => {
+    if (punch?.status !== 'clocked_in') return;
+
+    const interval = setInterval(async () => {
+      const location = await captureLocation();
+      if (!location) return;
+      await reportLocation(token, location);
+    }, LOCATION_REPORT_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [punch?.status, token]);
 
   const onRefresh = async () => {
     setRefreshing(true);
