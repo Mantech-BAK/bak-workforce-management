@@ -1,0 +1,20 @@
+{
+  "name": "zk-middleware",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "mssql": "^12.7.0",
+    "node-cron": "^4.6.0",
+    "pg": "^8.22.0"
+  }
+}
