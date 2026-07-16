@@ -7,6 +7,7 @@ import EmployeesPage from './pages/EmployeesPage';
 import EnrollmentLogPage from './pages/EnrollmentLogPage';
 import AttendancePage from './pages/AttendancePage';
 import ExceptionsPage from './pages/ExceptionsPage';
+import TasksPage from './pages/TasksPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import type { PageId } from './navigation';
 
@@ -28,7 +29,7 @@ function Portal() {
       content = <AttendancePage />;
       break;
     case 'tasks':
-      content = <PlaceholderPage icon="tasks" title="Tasks" description="Assign, monitor, and complete field tasks. Track progress and completion rates by team or individual." />;
+      content = <TasksPage />;
       break;
     case 'exceptions':
       content = <ExceptionsPage />;

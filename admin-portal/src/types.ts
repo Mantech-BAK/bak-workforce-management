@@ -60,6 +60,24 @@ export interface Exception {
   created_at: string;
 }
 
+// Mirrors GET /api/tasks. 'employee_name' comes from a LEFT JOIN on employees, so it
+// can be null if emp_id doesn't match any employee record. 'status' and 'source' are
+// free-text on the backend ('pending' and 'admin_portal' are the current defaults).
+export interface Task {
+  id: number;
+  emp_id: string;
+  employee_name: string | null;
+  task_date: string;
+  location: string | null;
+  description: string | null;
+  priority: string | null;
+  remarks: string | null;
+  status: string;
+  source: string | null;
+  teams_message_id: string | null;
+  created_at: string;
+}
+
 export type AttendanceView = 'daily' | 'monthly' | 'employee-wise' | 'site-wise';
 export type ExportFormat = 'excel' | 'csv' | 'pdf';
 

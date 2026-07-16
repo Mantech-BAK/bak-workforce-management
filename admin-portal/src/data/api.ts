@@ -6,8 +6,9 @@ import type {
   Employee,
   Exception,
   ExportFormat,
+  Task,
 } from '../types';
-import { mockAttendanceRecords, mockAuditLogs, mockEmployees, mockExceptions } from './mockData';
+import { mockAttendanceRecords, mockAuditLogs, mockEmployees, mockExceptions, mockTasks } from './mockData';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const REQUEST_TIMEOUT_MS = 3500;
@@ -69,6 +70,50 @@ export async function resolveException(
     return { ok: true };
   } catch {
     return { ok: false, error: 'Network error while resolving exception' };
+  }
+}
+
+export interface TaskFilters {
+  date?: string;
+  status?: string;
+}
+
+export async function getTasks(filters: TaskFilters = {}): Promise<Task[]> {
+  const params = new URLSearchParams();
+  if (filters.date) params.set('date', filters.date);
+  if (filters.status) params.set('status', filters.status);
+  const qs = params.toString();
+  return fetchJson<Task[]>(`/api/tasks${qs ? `?${qs}` : ''}`, mockTasks);
+}
+
+export interface CreateTaskPayload {
+  emp_id: string;
+  task_date: string;
+  location?: string;
+  description: string;
+  priority?: string;
+  remarks?: string;
+}
+
+export async function createTask(
+  payload: CreateTaskPayload,
+): Promise<{ ok: true; task: Task } | { ok: false; error: string }> {
+  if (!API_BASE_URL) {
+    return { ok: false, error: 'No API configured — cannot create tasks in mock mode.' };
+  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/tasks/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_TOKEN}` },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data.error || `Request failed: ${res.status}` };
+    }
+    return { ok: true, task: data as Task };
+  } catch {
+    return { ok: false, error: 'Network error while creating task' };
   }
 }
 
