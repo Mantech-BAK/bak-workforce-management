@@ -1,16 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { type Task, getMyTasks, updateTaskStatus } from '../api';
+import { type Task, type TaskStatus, getMyTasks, rescheduleTaskTomorrow, updateTaskStatus } from '../api';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Pending',
   in_progress: 'In Progress',
+  cannot_complete: 'Cannot Complete',
 };
 
 function formatDate(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatTimeRange(start: string | null, end: string | null): string | null {
+  if (!start && !end) return null;
+  const short = (t: string) => t.slice(0, 5);
+  if (start && end) return `${short(start)}–${short(end)}`;
+  return short(start || end || '');
 }
 
 export default function TasksScreen({ token }: { token: string }) {
@@ -35,12 +43,23 @@ export default function TasksScreen({ token }: { token: string }) {
     setRefreshing(false);
   };
 
-  const handleAdvance = async (task: Task, nextStatus: 'in_progress' | 'completed') => {
+  const handleAdvance = async (task: Task, nextStatus: TaskStatus) => {
     setBusyId(task.id);
     const result = await updateTaskStatus(token, task.id, nextStatus);
     setBusyId(null);
     if (!result.ok) {
       Alert.alert('Update Failed', result.error);
+      return;
+    }
+    await load();
+  };
+
+  const handleReschedule = async (task: Task) => {
+    setBusyId(task.id);
+    const result = await rescheduleTaskTomorrow(token, task.id);
+    setBusyId(null);
+    if (!result.ok) {
+      Alert.alert('Reschedule Failed', result.error);
       return;
     }
     await load();
@@ -67,47 +86,62 @@ export default function TasksScreen({ token }: { token: string }) {
           <Text style={styles.emptyText}>No open tasks</Text>
         </View>
       ) : (
-        tasks.map((task) => (
-          <View key={task.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardDate}>{formatDate(task.task_date)}</Text>
-              {task.priority ? <Text style={styles.priority}>{task.priority.toUpperCase()}</Text> : null}
-            </View>
-            <Text style={styles.description}>{task.description}</Text>
-            {task.location ? <Text style={styles.location}>{task.location}</Text> : null}
-            {task.remarks ? <Text style={styles.remarks}>{task.remarks}</Text> : null}
+        tasks.map((task) => {
+          const timeRange = formatTimeRange(task.start_time, task.end_time);
+          const busy = busyId === task.id;
+          return (
+            <View key={task.id} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardDate}>
+                  {formatDate(task.task_date)}
+                  {timeRange ? ` · ${timeRange}` : ''}
+                </Text>
+                {task.priority ? <Text style={styles.priority}>{task.priority.toUpperCase()}</Text> : null}
+              </View>
+              <Text style={styles.description}>{task.description}</Text>
+              {task.location ? <Text style={styles.location}>{task.location}</Text> : null}
+              {task.remarks ? <Text style={styles.remarks}>{task.remarks}</Text> : null}
 
-            <View style={styles.cardFooter}>
               <Text style={styles.status}>{STATUS_LABEL[task.status] ?? task.status}</Text>
+
               {task.status === 'pending' && (
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.startButton, busyId === task.id && styles.buttonDisabled]}
+                  style={[styles.actionButton, styles.startButton, busy && styles.buttonDisabled]}
                   onPress={() => handleAdvance(task, 'in_progress')}
-                  disabled={busyId === task.id}
+                  disabled={busy}
                 >
-                  {busyId === task.id ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.actionButtonText}>Start</Text>
-                  )}
+                  {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionButtonText}>Start</Text>}
                 </TouchableOpacity>
               )}
+
               {task.status === 'in_progress' && (
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.completeButton, busyId === task.id && styles.buttonDisabled]}
-                  onPress={() => handleAdvance(task, 'completed')}
-                  disabled={busyId === task.id}
-                >
-                  {busyId === task.id ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.actionButtonText}>Complete</Text>
-                  )}
-                </TouchableOpacity>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.completeButton, busy && styles.buttonDisabled]}
+                    onPress={() => handleAdvance(task, 'completed')}
+                    disabled={busy}
+                  >
+                    {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionButtonText}>Completed</Text>}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.cannotCompleteButton, busy && styles.buttonDisabled]}
+                    onPress={() => handleAdvance(task, 'cannot_complete')}
+                    disabled={busy}
+                  >
+                    <Text style={styles.actionButtonText}>Cannot Complete</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.tomorrowButton, busy && styles.buttonDisabled]}
+                    onPress={() => handleReschedule(task)}
+                    disabled={busy}
+                  >
+                    <Text style={styles.tomorrowButtonText}>Move to Tomorrow</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
-          </View>
-        ))
+          );
+        })
       )}
     </ScrollView>
   );
@@ -137,23 +171,20 @@ const styles = StyleSheet.create({
   description: { fontSize: 16, fontWeight: '600', marginTop: 6 },
   location: { fontSize: 13, color: '#6b7280', marginTop: 4 },
   remarks: { fontSize: 13, color: '#6b7280', marginTop: 4, fontStyle: 'italic' },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  status: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  status: { fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 12, marginBottom: 8 },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   actionButton: {
     borderRadius: 8,
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 90,
   },
-  startButton: { backgroundColor: '#111827' },
+  startButton: { backgroundColor: '#111827', minWidth: 90 },
   completeButton: { backgroundColor: '#059669' },
+  cannotCompleteButton: { backgroundColor: '#dc2626' },
+  tomorrowButton: { backgroundColor: '#e5e7eb' },
   buttonDisabled: { opacity: 0.5 },
   actionButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  tomorrowButtonText: { color: '#374151', fontSize: 13, fontWeight: '600' },
 });

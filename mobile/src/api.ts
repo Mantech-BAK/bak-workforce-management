@@ -100,6 +100,8 @@ export interface Task {
   id: number;
   emp_id: string;
   task_date: string;
+  start_time: string | null;
+  end_time: string | null;
   location: string | null;
   description: string | null;
   priority: string | null;
@@ -114,7 +116,7 @@ export function getMyTasks(token: string): Promise<Task[] | null> {
   return authedGet<Task[]>('/api/tasks/me', token);
 }
 
-export type TaskStatus = 'in_progress' | 'completed';
+export type TaskStatus = 'in_progress' | 'completed' | 'cannot_complete';
 
 export function updateTaskStatus(
   token: string,
@@ -122,6 +124,10 @@ export function updateTaskStatus(
   status: TaskStatus
 ): Promise<ApiSuccess<Task> | ApiFailure> {
   return authedPatch<Task>(`/api/tasks/${id}/status`, token, { status });
+}
+
+export function rescheduleTaskTomorrow(token: string, id: number): Promise<ApiSuccess<Task> | ApiFailure> {
+  return authedPost<Task>(`/api/tasks/${id}/reschedule-tomorrow`, token, {});
 }
 
 export interface Project {
@@ -185,7 +191,7 @@ export interface PunchInResult {
 
 export function punchIn(
   token: string,
-  params: { project_code: number; lat: number; lng: number }
+  params: { lat: number; lng: number }
 ): Promise<ApiSuccess<PunchInResult> | ApiFailure> {
   return authedPost<PunchInResult>('/api/attendance/punch-in', token, params);
 }

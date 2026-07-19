@@ -5,7 +5,7 @@ const pool = require('../config/db');
 const router = express.Router();
 
 router.get('/', async (req, res) => {
-  const { type, status, emp_id: empId } = req.query;
+  const { type, status, emp_id: empId, date } = req.query;
   const conditions = [];
   const values = [];
   let i = 1;
@@ -23,6 +23,11 @@ router.get('/', async (req, res) => {
   if (empId) {
     conditions.push(`ex.emp_id = $${i}`);
     values.push(empId);
+    i += 1;
+  }
+  if (date) {
+    conditions.push(`ex.created_at::date = $${i}`);
+    values.push(date);
     i += 1;
   }
 

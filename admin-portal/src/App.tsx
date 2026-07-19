@@ -8,7 +8,7 @@ import EnrollmentLogPage from './pages/EnrollmentLogPage';
 import AttendancePage from './pages/AttendancePage';
 import ExceptionsPage from './pages/ExceptionsPage';
 import TasksPage from './pages/TasksPage';
-import PlaceholderPage from './pages/PlaceholderPage';
+import ReportsPage from './pages/ReportsPage';
 import type { PageId } from './navigation';
 
 function Portal() {
@@ -38,7 +38,7 @@ function Portal() {
       content = <EnrollmentLogPage />;
       break;
     case 'reports':
-      content = <PlaceholderPage icon="reports" title="Reports" description="Generate and export workforce analytics reports covering attendance, compliance, geofence activity, and enrollment trends." />;
+      content = <ReportsPage />;
       break;
     default:
       content = <DashboardPage />;

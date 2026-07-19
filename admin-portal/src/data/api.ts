@@ -7,6 +7,7 @@ import type {
   Exception,
   ExportFormat,
   Task,
+  TaskReport,
 } from '../types';
 import { mockAttendanceRecords, mockAuditLogs, mockEmployees, mockExceptions, mockTasks } from './mockData';
 
@@ -44,6 +45,7 @@ export interface ExceptionFilters {
   type?: string;
   status?: string;
   empId?: string;
+  date?: string;
 }
 
 export async function getExceptions(filters: ExceptionFilters = {}): Promise<Exception[]> {
@@ -51,6 +53,7 @@ export async function getExceptions(filters: ExceptionFilters = {}): Promise<Exc
   if (filters.type) params.set('type', filters.type);
   if (filters.status) params.set('status', filters.status);
   if (filters.empId) params.set('emp_id', filters.empId);
+  if (filters.date) params.set('date', filters.date);
   const qs = params.toString();
   return fetchJson<Exception[]>(`/api/exceptions${qs ? `?${qs}` : ''}`, mockExceptions);
 }
@@ -88,7 +91,9 @@ export async function getTasks(filters: TaskFilters = {}): Promise<Task[]> {
 
 export interface CreateTaskPayload {
   emp_id: string;
-  task_date: string;
+  days?: number;
+  start_time?: string;
+  end_time?: string;
   location?: string;
   description: string;
   priority?: string;
@@ -97,7 +102,7 @@ export interface CreateTaskPayload {
 
 export async function createTask(
   payload: CreateTaskPayload,
-): Promise<{ ok: true; task: Task } | { ok: false; error: string }> {
+): Promise<{ ok: true; tasks: Task[] } | { ok: false; error: string }> {
   if (!API_BASE_URL) {
     return { ok: false, error: 'No API configured — cannot create tasks in mock mode.' };
   }
@@ -111,9 +116,56 @@ export async function createTask(
     if (!res.ok) {
       return { ok: false, error: data.error || `Request failed: ${res.status}` };
     }
-    return { ok: true, task: data as Task };
+    return { ok: true, tasks: Array.isArray(data) ? data : [data] };
   } catch {
     return { ok: false, error: 'Network error while creating task' };
+  }
+}
+
+export interface UpdateTaskPayload {
+  task_date?: string;
+  start_time?: string;
+  end_time?: string;
+  location?: string;
+  description?: string;
+  priority?: string;
+  remarks?: string;
+}
+
+export async function updateTask(
+  id: number,
+  payload: UpdateTaskPayload,
+): Promise<{ ok: true; task: Task } | { ok: false; error: string }> {
+  if (!API_BASE_URL) {
+    return { ok: false, error: 'No API configured — cannot edit tasks in mock mode.' };
+  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_TOKEN}` },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data.error || `Request failed: ${res.status}` };
+    }
+    return { ok: true, task: data as Task };
+  } catch {
+    return { ok: false, error: 'Network error while updating task' };
+  }
+}
+
+export async function getTaskReport(empId: string, from: string, to: string): Promise<TaskReport | null> {
+  if (!API_BASE_URL) return null;
+  try {
+    const params = new URLSearchParams({ emp_id: empId, from, to });
+    const res = await fetch(`${API_BASE_URL}/api/tasks/report?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as TaskReport;
+  } catch {
+    return null;
   }
 }
 

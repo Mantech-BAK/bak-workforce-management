@@ -1,23 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Modal,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Location from 'expo-location';
 import {
   type EmployeeMe,
-  type Project,
   type PunchStatus,
   getMe,
-  getProjects,
   getPunchStatus,
   getTodayTaskCount,
   punchIn,
@@ -57,8 +44,6 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [projects, setProjects] = useState<Project[] | null>(null);
-  const [showProjectPicker, setShowProjectPicker] = useState(false);
 
   const load = useCallback(async () => {
     const [meData, punchData, tasksData] = await Promise.all([
@@ -101,20 +86,7 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
     setRefreshing(false);
   };
 
-  const openProjectPicker = async () => {
-    setBusy(true);
-    const list = await getProjects(token);
-    setBusy(false);
-    if (!list || list.length === 0) {
-      Alert.alert('Punch In', 'No open projects available right now.');
-      return;
-    }
-    setProjects(list);
-    setShowProjectPicker(true);
-  };
-
-  const handleSelectProject = async (project: Project) => {
-    setShowProjectPicker(false);
+  const handlePunchIn = async () => {
     setBusy(true);
     const location = await captureLocation();
     if (!location) {
@@ -122,7 +94,7 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
       Alert.alert('Punch In', 'Location permission is required to punch in.');
       return;
     }
-    const result = await punchIn(token, { project_code: project.project_code, ...location });
+    const result = await punchIn(token, location);
     setBusy(false);
     if (!result.ok) {
       Alert.alert('Punch In Failed', result.error);
@@ -182,7 +154,7 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
       {canPunchIn ? (
         <TouchableOpacity
           style={[styles.punchButton, styles.punchInButton, busy && styles.buttonDisabled]}
-          onPress={openProjectPicker}
+          onPress={handlePunchIn}
           disabled={busy}
         >
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.punchButtonText}>Punch In</Text>}
@@ -200,30 +172,6 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
       <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
-
-      <Modal visible={showProjectPicker} animationType="slide" transparent onRequestClose={() => setShowProjectPicker(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Select Today&apos;s Project</Text>
-            <FlatList
-              data={projects ?? []}
-              keyExtractor={(item) => String(item.project_code)}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={styles.projectRow} onPress={() => handleSelectProject(item)}>
-                  <Text style={styles.projectName}>{item.project_name}</Text>
-                  {item.project_company_name ? (
-                    <Text style={styles.projectCompany}>{item.project_company_name}</Text>
-                  ) : null}
-                </TouchableOpacity>
-              )}
-              style={styles.projectList}
-            />
-            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowProjectPicker(false)}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -254,19 +202,4 @@ const styles = StyleSheet.create({
   punchButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   logoutButton: { marginTop: 24, alignItems: 'center', padding: 12 },
   logoutText: { color: '#dc2626', fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 24,
-    maxHeight: '70%',
-  },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
-  projectList: { marginBottom: 12 },
-  projectRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  projectName: { fontSize: 15, fontWeight: '600' },
-  projectCompany: { fontSize: 13, color: '#6b7280', marginTop: 2 },
-  modalCancel: { alignItems: 'center', padding: 12 },
-  modalCancelText: { color: '#6b7280', fontWeight: '600' },
 });

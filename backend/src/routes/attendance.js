@@ -46,17 +46,9 @@ router.post('/punch-in', async (req, res) => {
     return res.status(403).json({ error: 'Employee token required' });
   }
 
-  const { project_code, lat, lng } = req.body;
-  if (!project_code || lat === undefined || lng === undefined) {
-    return res.status(400).json({ error: 'project_code, lat, and lng are required' });
-  }
-
-  const project = await pool.query(
-    `SELECT project_code FROM projects WHERE project_code = $1 AND status = 'OPEN'`,
-    [project_code]
-  );
-  if (!project.rows[0]) {
-    return res.status(400).json({ error: 'Invalid or closed project_code' });
+  const { lat, lng } = req.body;
+  if (lat === undefined || lng === undefined) {
+    return res.status(400).json({ error: 'lat and lng are required' });
   }
 
   const open = await pool.query(
@@ -75,10 +67,10 @@ router.post('/punch-in', async (req, res) => {
   );
 
   const { rows } = await pool.query(
-    `INSERT INTO attendance (emp_id, cpr, punch_in_time, punch_in_lat, punch_in_lng, job_project_code, geofence_id, source)
-     VALUES ($1, $2, now(), $3, $4, $5, $6, 'mobile_app')
+    `INSERT INTO attendance (emp_id, cpr, punch_in_time, punch_in_lat, punch_in_lng, geofence_id, source)
+     VALUES ($1, $2, now(), $3, $4, $5, 'mobile_app')
      RETURNING punch_in_time`,
-    [req.employee.emp_id, employee.rows[0]?.cpr || null, lat, lng, project_code, geofence.rows[0].id]
+    [req.employee.emp_id, employee.rows[0]?.cpr || null, lat, lng, geofence.rows[0].id]
   );
 
   res.json({ status: 'clocked_in', punch_in_time: rows[0].punch_in_time });

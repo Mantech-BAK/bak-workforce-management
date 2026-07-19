@@ -6,6 +6,13 @@ const { processTeamsTasks } = require('../jobs/teamsTaskProcessor');
 
 const router = express.Router();
 
+function addDays(dateStr, n) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const next = new Date(y, m - 1, d + n);
+  const pad = (v) => String(v).padStart(2, '0');
+  return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+}
+
 router.get('/me/today', async (req, res) => {
   if (!req.employee) {
     return res.status(403).json({ error: 'Employee token required' });
@@ -25,11 +32,11 @@ router.get('/me', async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `SELECT id, emp_id, task_date, location, description, priority, remarks, status, source, teams_message_id, created_at
+    `SELECT id, emp_id, task_date, start_time, end_time, location, description, priority, remarks, status, source, teams_message_id, created_at
      FROM tasks
-     WHERE emp_id = $1 AND status != 'completed'
+     WHERE emp_id = $1 AND status != 'completed' AND task_date <= $2
      ORDER BY task_date ASC`,
-    [req.employee.emp_id]
+    [req.employee.emp_id, todayLocalDateString()]
   );
 
   res.json(rows);
@@ -55,7 +62,7 @@ router.get('/', async (req, res) => {
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const { rows } = await pool.query(
-    `SELECT t.id, t.emp_id, e.name AS employee_name, t.task_date, t.location, t.description,
+    `SELECT t.id, t.emp_id, e.name AS employee_name, t.task_date, t.start_time, t.end_time, t.location, t.description,
             t.priority, t.remarks, t.status, t.source, t.teams_message_id, t.created_at
      FROM tasks t
      LEFT JOIN employees e ON e.emp_id = t.emp_id
@@ -68,10 +75,24 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/create', async (req, res) => {
-  const { emp_id: empId, task_date: taskDate, location, description, priority, remarks } = req.body;
+  const {
+    emp_id: empId,
+    days,
+    start_time: startTime,
+    end_time: endTime,
+    location,
+    description,
+    priority,
+    remarks,
+  } = req.body;
 
-  if (!empId || !taskDate || !description) {
-    return res.status(400).json({ error: 'emp_id, task_date, and description are required' });
+  if (!empId || !description) {
+    return res.status(400).json({ error: 'emp_id and description are required' });
+  }
+
+  const numDays = days === undefined ? 1 : Number(days);
+  if (!Number.isInteger(numDays) || numDays < 1 || numDays > 365) {
+    return res.status(400).json({ error: 'days must be an integer between 1 and 365' });
   }
 
   const employee = await pool.query('SELECT emp_id FROM employees WHERE emp_id = $1 AND status = $2', [
@@ -82,25 +103,56 @@ router.post('/create', async (req, res) => {
     return res.status(400).json({ error: 'Employee not found or not active' });
   }
 
-  const existing = await pool.query('SELECT id FROM tasks WHERE emp_id = $1 AND task_date = $2', [
-    empId,
-    taskDate,
-  ]);
-  if (existing.rows[0]) {
-    return res.status(409).json({ error: 'A task already exists for this employee on this date' });
+  const today = todayLocalDateString();
+  const created = [];
+  for (let i = 0; i < numDays; i += 1) {
+    const { rows } = await pool.query(
+      `INSERT INTO tasks (emp_id, task_date, start_time, end_time, location, description, priority, remarks, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'admin_portal')
+       RETURNING id, emp_id, task_date, start_time, end_time, location, description, priority, remarks, status, source, created_at`,
+      [empId, addDays(today, i), startTime || null, endTime || null, location || null, description, priority || null, remarks || null]
+    );
+    created.push(rows[0]);
   }
 
-  const { rows } = await pool.query(
-    `INSERT INTO tasks (emp_id, task_date, location, description, priority, remarks, source)
-     VALUES ($1, $2, $3, $4, $5, $6, 'admin_portal')
-     RETURNING id, emp_id, task_date, location, description, priority, remarks, status, source, created_at`,
-    [empId, taskDate, location || null, description, priority || null, remarks || null]
-  );
-
-  res.status(201).json(rows[0]);
+  res.status(201).json(numDays === 1 ? created[0] : created);
 });
 
-const EMPLOYEE_ALLOWED_STATUSES = ['in_progress', 'completed'];
+const EDITABLE_FIELDS = ['task_date', 'start_time', 'end_time', 'location', 'description', 'priority', 'remarks'];
+
+router.patch('/:id', async (req, res) => {
+  const updates = [];
+  const values = [];
+  let i = 1;
+
+  for (const field of EDITABLE_FIELDS) {
+    if (field in req.body) {
+      updates.push(`${field} = $${i}`);
+      values.push(req.body[field] || null);
+      i += 1;
+    }
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: `No editable fields provided. Editable fields: ${EDITABLE_FIELDS.join(', ')}` });
+  }
+
+  values.push(req.params.id);
+
+  const { rows } = await pool.query(
+    `UPDATE tasks SET ${updates.join(', ')} WHERE id = $${i}
+     RETURNING id, emp_id, task_date, start_time, end_time, location, description, priority, remarks, status, source, teams_message_id, created_at`,
+    values
+  );
+
+  if (!rows[0]) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+
+  res.json(rows[0]);
+});
+
+const EMPLOYEE_ALLOWED_STATUSES = ['in_progress', 'completed', 'cannot_complete'];
 
 router.patch('/:id/status', async (req, res) => {
   if (!req.employee) {
@@ -112,7 +164,32 @@ router.patch('/:id/status', async (req, res) => {
     return res.status(400).json({ error: `status must be one of: ${EMPLOYEE_ALLOWED_STATUSES.join(', ')}` });
   }
 
-  const task = await pool.query('SELECT id FROM tasks WHERE id = $1 AND emp_id = $2', [
+  const task = await pool.query(
+    `SELECT id, task_date <= $3 AS is_due FROM tasks WHERE id = $1 AND emp_id = $2`,
+    [req.params.id, req.employee.emp_id, todayLocalDateString()]
+  );
+  if (!task.rows[0]) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+  if (!task.rows[0].is_due) {
+    return res.status(400).json({ error: 'Task is not due yet' });
+  }
+
+  const { rows } = await pool.query(
+    `UPDATE tasks SET status = $1 WHERE id = $2
+     RETURNING id, emp_id, task_date, start_time, end_time, location, description, priority, remarks, status, source, teams_message_id, created_at`,
+    [status, req.params.id]
+  );
+
+  res.json(rows[0]);
+});
+
+router.post('/:id/reschedule-tomorrow', async (req, res) => {
+  if (!req.employee) {
+    return res.status(403).json({ error: 'Employee token required' });
+  }
+
+  const task = await pool.query('SELECT id, task_date FROM tasks WHERE id = $1 AND emp_id = $2', [
     req.params.id,
     req.employee.emp_id,
   ]);
@@ -121,12 +198,35 @@ router.patch('/:id/status', async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `UPDATE tasks SET status = $1 WHERE id = $2
-     RETURNING id, emp_id, task_date, location, description, priority, remarks, status, source, teams_message_id, created_at`,
-    [status, req.params.id]
+    `UPDATE tasks SET task_date = task_date + 1, status = 'pending' WHERE id = $1
+     RETURNING id, emp_id, task_date, start_time, end_time, location, description, priority, remarks, status, source, teams_message_id, created_at`,
+    [req.params.id]
   );
 
   res.json(rows[0]);
+});
+
+router.get('/report', async (req, res) => {
+  const { emp_id: empId, from, to } = req.query;
+
+  if (!empId || !from || !to) {
+    return res.status(400).json({ error: 'emp_id, from, and to are required' });
+  }
+
+  const { rows } = await pool.query(
+    `SELECT status, count(*) AS count
+     FROM tasks
+     WHERE emp_id = $1 AND task_date BETWEEN $2 AND $3 AND status IN ('completed', 'cannot_complete')
+     GROUP BY status`,
+    [empId, from, to]
+  );
+
+  const result = { completed: 0, cannot_complete: 0 };
+  for (const row of rows) {
+    result[row.status] = Number(row.count);
+  }
+
+  res.json(result);
 });
 
 router.post('/process-teams', async (req, res) => {

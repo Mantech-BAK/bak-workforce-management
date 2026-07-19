@@ -71,10 +71,10 @@ export const mockAttendanceRecords: AttendanceRecord[] = attendanceBase.map((r, 
 }));
 
 export const mockTasks: Task[] = [
-  { id: 701, emp_id: 'EMP-1001', employee_name: 'Aisha Khan', task_date: '2026-07-16', location: 'Downtown HQ Refit', description: 'Inspect scaffolding on level 3', priority: 'high', remarks: 'Bring PPE checklist', status: 'pending', source: 'admin_portal', teams_message_id: null, created_at: '2026-07-15T09:00:00Z' },
-  { id: 702, emp_id: 'EMP-1003', employee_name: 'Priya Nair', task_date: '2026-07-16', location: 'Downtown HQ Refit', description: 'Cable routing punch list', priority: 'medium', remarks: null, status: 'pending', source: 'teams', teams_message_id: 'msg-2201', created_at: '2026-07-15T10:30:00Z' },
-  { id: 703, emp_id: 'EMP-1006', employee_name: 'Tom Whitfield', task_date: '2026-07-15', location: 'South Depot Logistics', description: 'Delivery route confirmation', priority: 'low', remarks: null, status: 'completed', source: 'admin_portal', teams_message_id: null, created_at: '2026-07-14T08:15:00Z' },
-  { id: 704, emp_id: 'EMP-1016', employee_name: 'Devon Reed', task_date: '2026-07-14', location: 'East Facility Maintenance', description: 'HVAC filter replacement', priority: 'medium', remarks: 'Order parts in advance', status: 'completed', source: 'teams', teams_message_id: 'msg-2188', created_at: '2026-07-13T14:00:00Z' },
+  { id: 701, emp_id: 'EMP-1001', employee_name: 'Aisha Khan', task_date: '2026-07-16', start_time: '09:00', end_time: '11:00', location: 'Downtown HQ Refit', description: 'Inspect scaffolding on level 3', priority: 'high', remarks: 'Bring PPE checklist', status: 'pending', source: 'admin_portal', teams_message_id: null, created_at: '2026-07-15T09:00:00Z' },
+  { id: 702, emp_id: 'EMP-1003', employee_name: 'Priya Nair', task_date: '2026-07-16', start_time: null, end_time: null, location: 'Downtown HQ Refit', description: 'Cable routing punch list', priority: 'medium', remarks: null, status: 'pending', source: 'teams', teams_message_id: 'msg-2201', created_at: '2026-07-15T10:30:00Z' },
+  { id: 703, emp_id: 'EMP-1006', employee_name: 'Tom Whitfield', task_date: '2026-07-15', start_time: '13:00', end_time: '15:00', location: 'South Depot Logistics', description: 'Delivery route confirmation', priority: 'low', remarks: null, status: 'completed', source: 'admin_portal', teams_message_id: null, created_at: '2026-07-14T08:15:00Z' },
+  { id: 704, emp_id: 'EMP-1016', employee_name: 'Devon Reed', task_date: '2026-07-14', start_time: null, end_time: null, location: 'East Facility Maintenance', description: 'HVAC filter replacement', priority: 'medium', remarks: 'Order parts in advance', status: 'completed', source: 'teams', teams_message_id: 'msg-2188', created_at: '2026-07-13T14:00:00Z' },
 ];
 
 export const mockExceptions: Exception[] = [

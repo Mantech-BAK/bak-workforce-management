@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckSquare, ChevronDown, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { AlertTriangle, CheckSquare, ChevronDown, Pencil, Plus, RefreshCw, Search, X } from 'lucide-react';
 import type { Employee, Task } from '../types';
-import { createTask, getEmployees, getTasks } from '../data/api';
+import { createTask, getEmployees, getTasks, updateTask } from '../data/api';
 
 const PRIORITY_OPTIONS = ['low', 'medium', 'high'];
 
@@ -54,14 +54,21 @@ function TaskStatusBadge({ status }: { status: string }) {
   const style =
     s === 'completed'
       ? 'bg-emerald-50 text-emerald-700'
-      : s === 'cancelled'
-        ? 'bg-slate-100 text-slate-500'
-        : 'bg-amber-50 text-amber-700';
+      : s === 'cannot_complete'
+        ? 'bg-rose-50 text-rose-700'
+        : s === 'cancelled'
+          ? 'bg-slate-100 text-slate-500'
+          : 'bg-amber-50 text-amber-700';
   return (
     <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${style}`}>
-      {status}
+      {status.replace(/_/g, ' ')}
     </span>
   );
+}
+
+function todayString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function formatDate(value: string): string {
@@ -70,29 +77,47 @@ function formatDate(value: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-interface AddTaskModalProps {
-  onClose: () => void;
-  onCreated: () => void;
+function formatTimeRange(start: string | null, end: string | null): string {
+  if (!start && !end) return '—';
+  const short = (t: string) => t.slice(0, 5);
+  if (start && end) return `${short(start)}–${short(end)}`;
+  return short(start || end || '');
 }
 
-function AddTaskModal({ onClose, onCreated }: AddTaskModalProps) {
+const fieldClass = (hasError: boolean) =>
+  `w-full rounded-lg border bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:bg-white ${
+    hasError ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-emerald-400'
+  }`;
+
+interface TaskModalProps {
+  task?: Task;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function TaskModal({ task, onClose, onSaved }: TaskModalProps) {
+  const isEdit = Boolean(task);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeeQuery, setEmployeeQuery] = useState('');
+  const [employeeQuery, setEmployeeQuery] = useState(task ? `${task.employee_name ?? task.emp_id} (${task.emp_id})` : '');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showEmployeeList, setShowEmployeeList] = useState(false);
-  const [taskDate, setTaskDate] = useState('');
-  const [location, setLocation] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState('');
-  const [remarks, setRemarks] = useState('');
+  const [taskDate, setTaskDate] = useState(task?.task_date.slice(0, 10) ?? '');
+  const [days, setDays] = useState('1');
+  const [startTime, setStartTime] = useState(task?.start_time?.slice(0, 5) ?? '');
+  const [endTime, setEndTime] = useState(task?.end_time?.slice(0, 5) ?? '');
+  const [location, setLocation] = useState(task?.location ?? '');
+  const [description, setDescription] = useState(task?.description ?? '');
+  const [priority, setPriority] = useState(task?.priority ?? '');
+  const [remarks, setRemarks] = useState(task?.remarks ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
-    getEmployees().then(setEmployees);
-  }, []);
+    if (!isEdit) getEmployees().then(setEmployees);
+  }, [isEdit]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -127,42 +152,69 @@ function AddTaskModal({ onClose, onCreated }: AddTaskModalProps) {
 
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!selectedEmployee) errors.employee = 'Select an employee from the list.';
-    if (!taskDate) errors.taskDate = 'Date is required.';
+    if (!isEdit && !selectedEmployee) errors.employee = 'Select an employee from the list.';
     if (!description.trim()) errors.description = 'Description is required.';
+    if (!isEdit) {
+      const numDays = Number(days);
+      if (!Number.isInteger(numDays) || numDays < 1) errors.days = 'Days must be a positive whole number.';
+    }
+    if (startTime && endTime && endTime <= startTime) errors.endTime = 'End time must be after start time.';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async () => {
+    // submittingRef is a synchronous guard: setSubmitting(true) below doesn't take
+    // effect (re-rendering the button as disabled) until the next commit, leaving a
+    // window where a second click event can re-enter this handler before React
+    // catches up. The ref is set immediately, closing that window.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     setServerError(null);
-    if (!validate() || !selectedEmployee) return;
+    if (!validate()) {
+      submittingRef.current = false;
+      return;
+    }
 
     setSubmitting(true);
-    const result = await createTask({
-      emp_id: selectedEmployee.emp_id,
-      task_date: taskDate,
-      location: location.trim() || undefined,
-      description: description.trim(),
-      priority: priority || undefined,
-      remarks: remarks.trim() || undefined,
-    });
+    const result = isEdit
+      ? await updateTask(task!.id, {
+          task_date: taskDate || undefined,
+          start_time: startTime || undefined,
+          end_time: endTime || undefined,
+          location: location.trim() || undefined,
+          description: description.trim(),
+          priority: priority || undefined,
+          remarks: remarks.trim() || undefined,
+        })
+      : await createTask({
+          emp_id: selectedEmployee!.emp_id,
+          days: Number(days),
+          start_time: startTime || undefined,
+          end_time: endTime || undefined,
+          location: location.trim() || undefined,
+          description: description.trim(),
+          priority: priority || undefined,
+          remarks: remarks.trim() || undefined,
+        });
     setSubmitting(false);
+    submittingRef.current = false;
 
     if (!result.ok) {
       setServerError(result.error);
       return;
     }
 
-    onCreated();
+    onSaved();
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-800">Add Task</h3>
+          <h3 className="text-lg font-bold text-slate-800">{isEdit ? 'Edit Task' : 'Add Task'}</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
             <X size={18} />
           </button>
@@ -174,82 +226,84 @@ function AddTaskModal({ onClose, onCreated }: AddTaskModalProps) {
           </div>
         )}
 
-        <div className="space-y-4">
-          <div ref={containerRef} className="relative">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div ref={containerRef} className="relative sm:col-span-2">
             <label className="mb-1.5 block text-xs font-medium text-slate-500">Employee</label>
-            <div className="relative">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={employeeQuery}
-                onChange={(e) => handleEmployeeQueryChange(e.target.value)}
-                onFocus={() => setShowEmployeeList(true)}
-                placeholder="Search by name or employee ID..."
-                className={`w-full rounded-lg border bg-slate-50 py-2.5 pl-9 pr-4 text-sm text-slate-700 placeholder-slate-400 outline-none transition-colors focus:bg-white ${
-                  fieldErrors.employee ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-emerald-400'
-                }`}
-              />
-            </div>
-            {showEmployeeList && matches.length > 0 && (
-              <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-                {matches.map((emp) => (
-                  <button
-                    key={emp.id}
-                    type="button"
-                    onClick={() => handleSelectEmployee(emp)}
-                    className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  >
-                    <span className="font-medium text-slate-700">{emp.name}</span>
-                    <span className="text-xs text-slate-400">{emp.emp_id} · {emp.department || '—'}</span>
-                  </button>
-                ))}
+            {isEdit ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm text-slate-500">
+                {employeeQuery}
               </div>
+            ) : (
+              <>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={employeeQuery}
+                    onChange={(e) => handleEmployeeQueryChange(e.target.value)}
+                    onFocus={() => setShowEmployeeList(true)}
+                    placeholder="Search by name or employee ID..."
+                    className={`${fieldClass(Boolean(fieldErrors.employee))} pl-9`}
+                  />
+                </div>
+                {showEmployeeList && matches.length > 0 && (
+                  <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                    {matches.map((emp) => (
+                      <button
+                        key={emp.id}
+                        type="button"
+                        onClick={() => handleSelectEmployee(emp)}
+                        className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-slate-50"
+                      >
+                        <span className="font-medium text-slate-700">{emp.name}</span>
+                        <span className="text-xs text-slate-400">{emp.emp_id} · {emp.department || '—'}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
             {fieldErrors.employee && <p className="mt-1 text-xs text-rose-600">{fieldErrors.employee}</p>}
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-500">Date</label>
-            <input
-              type="date"
-              value={taskDate}
-              onChange={(e) => {
-                setTaskDate(e.target.value);
-                setFieldErrors((prev) => ({ ...prev, taskDate: '' }));
-              }}
-              className={`w-full rounded-lg border bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:bg-white ${
-                fieldErrors.taskDate ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-emerald-400'
-              }`}
-            />
-            {fieldErrors.taskDate && <p className="mt-1 text-xs text-rose-600">{fieldErrors.taskDate}</p>}
-          </div>
+          {isEdit ? (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-500">Date</label>
+              <input
+                type="date"
+                value={taskDate}
+                onChange={(e) => setTaskDate(e.target.value)}
+                className={fieldClass(false)}
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-500">Date</label>
+              <input
+                type="date"
+                value={todayString()}
+                disabled
+                className={`${fieldClass(false)} cursor-not-allowed bg-slate-100 text-slate-500`}
+              />
+            </div>
+          )}
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-500">Location</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Optional"
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none transition-colors focus:border-emerald-400 focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-500">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => {
-                setDescription(e.target.value);
-                setFieldErrors((prev) => ({ ...prev, description: '' }));
-              }}
-              rows={3}
-              className={`w-full rounded-lg border bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:bg-white ${
-                fieldErrors.description ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-emerald-400'
-              }`}
-            />
-            {fieldErrors.description && <p className="mt-1 text-xs text-rose-600">{fieldErrors.description}</p>}
-          </div>
+          {!isEdit && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-500">Repeat for how many days</label>
+              <input
+                type="number"
+                min={1}
+                value={days}
+                onChange={(e) => {
+                  setDays(e.target.value);
+                  setFieldErrors((prev) => ({ ...prev, days: '' }));
+                }}
+                className={fieldClass(Boolean(fieldErrors.days))}
+              />
+              {fieldErrors.days && <p className="mt-1 text-xs text-rose-600">{fieldErrors.days}</p>}
+            </div>
+          )}
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-slate-500">Priority</label>
@@ -257,7 +311,7 @@ function AddTaskModal({ onClose, onCreated }: AddTaskModalProps) {
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 pr-9 text-sm text-slate-700 outline-none transition-colors focus:border-emerald-400 focus:bg-white"
+                className={`${fieldClass(false)} appearance-none pr-9`}
               >
                 <option value="">No priority</option>
                 {PRIORITY_OPTIONS.map((p) => (
@@ -269,13 +323,65 @@ function AddTaskModal({ onClose, onCreated }: AddTaskModalProps) {
           </div>
 
           <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-500">Start Time</label>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => {
+                setStartTime(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, endTime: '' }));
+              }}
+              className={fieldClass(false)}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-500">End Time</label>
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => {
+                setEndTime(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, endTime: '' }));
+              }}
+              className={fieldClass(Boolean(fieldErrors.endTime))}
+            />
+            {fieldErrors.endTime && <p className="mt-1 text-xs text-rose-600">{fieldErrors.endTime}</p>}
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-slate-500">Location</label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Optional"
+              className={fieldClass(false)}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-slate-500">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, description: '' }));
+              }}
+              rows={2}
+              className={fieldClass(Boolean(fieldErrors.description))}
+            />
+            {fieldErrors.description && <p className="mt-1 text-xs text-rose-600">{fieldErrors.description}</p>}
+          </div>
+
+          <div className="sm:col-span-2">
             <label className="mb-1.5 block text-xs font-medium text-slate-500">Remarks</label>
             <textarea
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               rows={2}
               placeholder="Optional"
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none transition-colors focus:border-emerald-400 focus:bg-white"
+              className={fieldClass(false)}
             />
           </div>
         </div>
@@ -292,7 +398,7 @@ function AddTaskModal({ onClose, onCreated }: AddTaskModalProps) {
             disabled={submitting}
             className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
           >
-            {submitting ? 'Creating...' : 'Create Task'}
+            {submitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Task'}
           </button>
         </div>
       </div>
@@ -305,7 +411,8 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [showModal, setShowModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -340,7 +447,7 @@ export default function TasksPage() {
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600"
           >
             <Plus size={15} /> Add Task
@@ -373,7 +480,7 @@ export default function TasksPage() {
             >
               <option value="all">All Statuses</option>
               {statuses.map((s) => (
-                <option key={s} value={s} className="capitalize">{capitalize(s)}</option>
+                <option key={s} value={s} className="capitalize">{capitalize(s.replace(/_/g, ' '))}</option>
               ))}
             </select>
             <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -399,11 +506,13 @@ export default function TasksPage() {
                 <tr>
                   <th className="px-6 py-3 font-medium">Employee</th>
                   <th className="px-6 py-3 font-medium">Date</th>
+                  <th className="px-6 py-3 font-medium">Time</th>
                   <th className="px-6 py-3 font-medium">Description</th>
                   <th className="px-6 py-3 font-medium">Location</th>
                   <th className="px-6 py-3 font-medium">Priority</th>
                   <th className="px-6 py-3 font-medium">Status</th>
                   <th className="px-6 py-3 font-medium">Source</th>
+                  <th className="px-6 py-3 font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -414,6 +523,7 @@ export default function TasksPage() {
                       <p className="text-xs text-slate-400">{task.emp_id}</p>
                     </td>
                     <td className="px-6 py-3.5 text-slate-600">{formatDate(task.task_date)}</td>
+                    <td className="px-6 py-3.5 text-slate-500">{formatTimeRange(task.start_time, task.end_time)}</td>
                     <td className="max-w-xs truncate px-6 py-3.5 text-slate-500" title={task.description ?? ''}>
                       {task.description || '—'}
                     </td>
@@ -421,6 +531,15 @@ export default function TasksPage() {
                     <td className="px-6 py-3.5"><PriorityBadge priority={task.priority} /></td>
                     <td className="px-6 py-3.5"><TaskStatusBadge status={task.status} /></td>
                     <td className="px-6 py-3.5"><SourceBadge source={task.source} /></td>
+                    <td className="px-6 py-3.5">
+                      <button
+                        onClick={() => setEditingTask(task)}
+                        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                        title="Edit task"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -429,7 +548,8 @@ export default function TasksPage() {
         )}
       </div>
 
-      {showModal && <AddTaskModal onClose={() => setShowModal(false)} onCreated={load} />}
+      {showAddModal && <TaskModal onClose={() => setShowAddModal(false)} onSaved={load} />}
+      {editingTask && <TaskModal task={editingTask} onClose={() => setEditingTask(null)} onSaved={load} />}
     </div>
   );
 }

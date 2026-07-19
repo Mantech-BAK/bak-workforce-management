@@ -68,6 +68,8 @@ export interface Task {
   emp_id: string;
   employee_name: string | null;
   task_date: string;
+  start_time: string | null;
+  end_time: string | null;
   location: string | null;
   description: string | null;
   priority: string | null;
@@ -76,6 +78,11 @@ export interface Task {
   source: string | null;
   teams_message_id: string | null;
   created_at: string;
+}
+
+export interface TaskReport {
+  completed: number;
+  cannot_complete: number;
 }
 
 export type AttendanceView = 'daily' | 'monthly' | 'employee-wise' | 'site-wise';
