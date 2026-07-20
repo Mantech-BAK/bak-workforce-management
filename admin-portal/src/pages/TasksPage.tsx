@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckSquare, ChevronDown, Pencil, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { AlertTriangle, CheckSquare, ChevronDown, FileSpreadsheet, Pencil, Plus, RefreshCw, Search, Upload, X } from 'lucide-react';
 import type { Employee, Project, Task } from '../types';
-import { createTask, getEmployees, getTasks, updateTask } from '../data/api';
+import {
+  type BulkImportResult,
+  createTask,
+  getEmployees,
+  getTasks,
+  importTasksBulk,
+  updateTask,
+} from '../data/api';
 import ProjectSelect from '../components/ProjectSelect';
 
 const PRIORITY_OPTIONS = ['low', 'medium', 'high'];
@@ -426,6 +433,114 @@ function TaskModal({ task, onClose, onSaved }: TaskModalProps) {
   );
 }
 
+interface BulkImportModalProps {
+  onClose: () => void;
+  onImported: () => void;
+}
+
+function BulkImportModal({ onClose, onImported }: BulkImportModalProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<BulkImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleImport = async () => {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    setResult(null);
+    const res = await importTasksBulk(file);
+    setUploading(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    setResult(res.result);
+    if (res.result.succeeded > 0) onImported();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+      <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-slate-800">Import Tasks from Excel</h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <AlertTriangle size={16} /> {error}
+          </div>
+        )}
+
+        <p className="mb-4 text-sm text-slate-500">
+          Use the Bulk Task Import Excel template distributed to admins. Fill in the yellow cells, leave the
+          locked Task Date and Project Name cells as-is, then upload it below.
+        </p>
+
+        <div className="mb-4">
+          <label className="mb-1.5 block text-xs font-medium text-slate-500">Excel File</label>
+          <input
+            type="file"
+            accept=".xlsx"
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              setResult(null);
+              setError(null);
+            }}
+            className="block w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700"
+          />
+        </div>
+
+        {result && (
+          <div className="mb-4 space-y-3">
+            <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {result.succeeded} of {result.total} row{result.total === 1 ? '' : 's'} imported successfully.
+            </div>
+            {result.failed.length > 0 && (
+              <div className="overflow-hidden rounded-lg border border-rose-200">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-rose-50 text-rose-700">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Row</th>
+                      <th className="px-3 py-2 font-medium">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-rose-100">
+                    {result.failed.map((f) => (
+                      <tr key={f.row}>
+                        <td className="px-3 py-2 font-medium text-slate-600">{f.row}</td>
+                        <td className="px-3 py-2 text-slate-600">{f.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            Close
+          </button>
+          <button
+            onClick={handleImport}
+            disabled={!file || uploading}
+            className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
+          >
+            <Upload size={15} /> {uploading ? 'Importing...' : 'Import'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -433,6 +548,7 @@ export default function TasksPage() {
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const load = () => {
@@ -466,6 +582,12 @@ export default function TasksPage() {
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
           >
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
+          </button>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            <FileSpreadsheet size={15} /> Import from Excel
           </button>
           <button
             onClick={() => setShowAddModal(true)}
@@ -575,6 +697,7 @@ export default function TasksPage() {
 
       {showAddModal && <TaskModal onClose={() => setShowAddModal(false)} onSaved={load} />}
       {editingTask && <TaskModal task={editingTask} onClose={() => setEditingTask(null)} onSaved={load} />}
+      {showImportModal && <BulkImportModal onClose={() => setShowImportModal(false)} onImported={load} />}
     </div>
   );
 }

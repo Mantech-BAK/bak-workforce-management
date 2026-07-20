@@ -162,6 +162,39 @@ export async function updateTask(
   }
 }
 
+export interface BulkImportFailure {
+  row: number;
+  reason: string;
+}
+
+export interface BulkImportResult {
+  total: number;
+  succeeded: number;
+  failed: BulkImportFailure[];
+}
+
+export async function importTasksBulk(file: File): Promise<{ ok: true; result: BulkImportResult } | { ok: false; error: string }> {
+  if (!API_BASE_URL) {
+    return { ok: false, error: 'No API configured — cannot import tasks in mock mode.' };
+  }
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE_URL}/api/tasks/bulk-import`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ADMIN_TOKEN}` },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data.error || `Request failed: ${res.status}` };
+    }
+    return { ok: true, result: data as BulkImportResult };
+  } catch {
+    return { ok: false, error: 'Network error while importing tasks' };
+  }
+}
+
 export async function getTaskReport(empId: string, from: string, to: string): Promise<TaskReport | null> {
   if (!API_BASE_URL) return null;
   try {
