@@ -90,7 +90,13 @@ async function processTeamsTasks() {
     return summary;
   }
 
-  const lastProcessedTimeRaw = await getSetting('lastProcessedTime');
+  // Keyed to the channel ID rather than a single global 'lastProcessedTime': switching
+  // TEAMS_CHANNEL_ID to a different channel then automatically starts fresh (no old
+  // watermark to falsely suppress that channel's older messages), and switching back
+  // to a previously-watched channel resumes from where it left off instead of
+  // re-processing everything since a stale 24h-ago fallback.
+  const watermarkKey = `lastProcessedTime:${CHANNEL_ID}`;
+  const lastProcessedTimeRaw = await getSetting(watermarkKey);
   const since = lastProcessedTimeRaw ? new Date(lastProcessedTimeRaw) : new Date(Date.now() - 24 * 3600 * 1000);
   const runStartedAt = new Date();
 
@@ -117,7 +123,7 @@ async function processTeamsTasks() {
     }
   }
 
-  await setSetting('lastProcessedTime', runStartedAt.toISOString());
+  await setSetting(watermarkKey, runStartedAt.toISOString());
   return summary;
 }
 
