@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckSquare, ChevronDown, Pencil, Plus, RefreshCw, Search, X } from 'lucide-react';
-import type { Employee, Task } from '../types';
+import type { Employee, Project, Task } from '../types';
 import { createTask, getEmployees, getTasks, updateTask } from '../data/api';
+import ProjectSelect from '../components/ProjectSelect';
 
 const PRIORITY_OPTIONS = ['low', 'medium', 'high'];
 
@@ -101,6 +102,9 @@ function TaskModal({ task, onClose, onSaved }: TaskModalProps) {
   const [employeeQuery, setEmployeeQuery] = useState(task ? `${task.employee_name ?? task.emp_id} (${task.emp_id})` : '');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showEmployeeList, setShowEmployeeList] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(
+    task ? { project_code: task.project_code, project_name: task.project_name ?? `Project ${task.project_code}`, project_company_name: null } : null
+  );
   const [taskDate, setTaskDate] = useState(task?.task_date.slice(0, 10) ?? '');
   const [days, setDays] = useState('1');
   const [startTime, setStartTime] = useState(task?.start_time?.slice(0, 5) ?? '');
@@ -153,6 +157,7 @@ function TaskModal({ task, onClose, onSaved }: TaskModalProps) {
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
     if (!isEdit && !selectedEmployee) errors.employee = 'Select an employee from the list.';
+    if (!selectedProject) errors.project = 'Select a project from the list.';
     if (!description.trim()) errors.description = 'Description is required.';
     if (!isEdit) {
       const numDays = Number(days);
@@ -181,6 +186,7 @@ function TaskModal({ task, onClose, onSaved }: TaskModalProps) {
     const result = isEdit
       ? await updateTask(task!.id, {
           task_date: taskDate || undefined,
+          project_code: selectedProject!.project_code,
           start_time: startTime || undefined,
           end_time: endTime || undefined,
           location: location.trim() || undefined,
@@ -190,6 +196,7 @@ function TaskModal({ task, onClose, onSaved }: TaskModalProps) {
         })
       : await createTask({
           emp_id: selectedEmployee!.emp_id,
+          project_code: selectedProject!.project_code,
           days: Number(days),
           start_time: startTime || undefined,
           end_time: endTime || undefined,
@@ -264,6 +271,19 @@ function TaskModal({ task, onClose, onSaved }: TaskModalProps) {
               </>
             )}
             {fieldErrors.employee && <p className="mt-1 text-xs text-rose-600">{fieldErrors.employee}</p>}
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-slate-500">Project</label>
+            <ProjectSelect
+              value={selectedProject}
+              onChange={(p) => {
+                setSelectedProject(p);
+                setFieldErrors((prev) => ({ ...prev, project: '' }));
+              }}
+              hasError={Boolean(fieldErrors.project)}
+            />
+            {fieldErrors.project && <p className="mt-1 text-xs text-rose-600">{fieldErrors.project}</p>}
           </div>
 
           {isEdit ? (
@@ -406,6 +426,7 @@ function TaskModal({ task, onClose, onSaved }: TaskModalProps) {
   );
 }
 
+
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -505,6 +526,7 @@ export default function TasksPage() {
               <thead className="bg-slate-50 text-xs uppercase text-slate-400">
                 <tr>
                   <th className="px-6 py-3 font-medium">Employee</th>
+                  <th className="px-6 py-3 font-medium">Project</th>
                   <th className="px-6 py-3 font-medium">Date</th>
                   <th className="px-6 py-3 font-medium">Time</th>
                   <th className="px-6 py-3 font-medium">Description</th>
@@ -521,6 +543,9 @@ export default function TasksPage() {
                     <td className="px-6 py-3.5">
                       <p className="font-medium text-slate-700">{task.employee_name || 'Unknown'}</p>
                       <p className="text-xs text-slate-400">{task.emp_id}</p>
+                    </td>
+                    <td className="max-w-[12rem] truncate px-6 py-3.5 text-slate-500" title={task.project_name ?? ''}>
+                      {task.project_name || `Code ${task.project_code}`}
                     </td>
                     <td className="px-6 py-3.5 text-slate-600">{formatDate(task.task_date)}</td>
                     <td className="px-6 py-3.5 text-slate-500">{formatTimeRange(task.start_time, task.end_time)}</td>

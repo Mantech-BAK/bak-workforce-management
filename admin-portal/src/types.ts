@@ -60,14 +60,17 @@ export interface Exception {
   created_at: string;
 }
 
-// Mirrors GET /api/tasks. 'employee_name' comes from a LEFT JOIN on employees, so it
-// can be null if emp_id doesn't match any employee record. 'status' and 'source' are
-// free-text on the backend ('pending' and 'admin_portal' are the current defaults).
+// Mirrors GET /api/tasks. 'employee_name' and 'project_name' come from LEFT JOINs on
+// employees/projects, so either can be null if the id doesn't match a record. 'status'
+// and 'source' are free-text on the backend ('pending' and 'admin_portal' are the
+// current defaults).
 export interface Task {
   id: number;
   emp_id: string;
   employee_name: string | null;
   task_date: string;
+  project_code: number;
+  project_name: string | null;
   start_time: string | null;
   end_time: string | null;
   location: string | null;
@@ -78,6 +81,14 @@ export interface Task {
   source: string | null;
   teams_message_id: string | null;
   created_at: string;
+}
+
+// Mirrors GET /api/projects (only status='OPEN' projects are returned). project_name is
+// nullable on the backend — a handful of real OPEN projects have no name set.
+export interface Project {
+  project_code: number;
+  project_name: string | null;
+  project_company_name: string | null;
 }
 
 export interface TaskReport {

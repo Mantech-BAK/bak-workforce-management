@@ -6,10 +6,11 @@ import type {
   Employee,
   Exception,
   ExportFormat,
+  Project,
   Task,
   TaskReport,
 } from '../types';
-import { mockAttendanceRecords, mockAuditLogs, mockEmployees, mockExceptions, mockTasks } from './mockData';
+import { mockAttendanceRecords, mockAuditLogs, mockEmployees, mockExceptions, mockProjects, mockTasks } from './mockData';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const REQUEST_TIMEOUT_MS = 3500;
@@ -39,6 +40,10 @@ export async function getEmployees(): Promise<Employee[]> {
 
 export async function getAuditLogs(): Promise<AuditLogEntry[]> {
   return fetchJson<AuditLogEntry[]>('/api/audit-logs/enrollments', mockAuditLogs);
+}
+
+export async function getProjects(): Promise<Project[]> {
+  return fetchJson<Project[]>('/api/projects', mockProjects);
 }
 
 export interface ExceptionFilters {
@@ -91,6 +96,7 @@ export async function getTasks(filters: TaskFilters = {}): Promise<Task[]> {
 
 export interface CreateTaskPayload {
   emp_id: string;
+  project_code: number;
   days?: number;
   start_time?: string;
   end_time?: string;
@@ -124,6 +130,7 @@ export async function createTask(
 
 export interface UpdateTaskPayload {
   task_date?: string;
+  project_code?: number;
   start_time?: string;
   end_time?: string;
   location?: string;

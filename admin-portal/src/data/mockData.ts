@@ -1,4 +1,4 @@
-import type { AttendanceRecord, AuditLogEntry, Employee, Exception, Task } from '../types';
+import type { AttendanceRecord, AuditLogEntry, Employee, Exception, Project, Task } from '../types';
 
 export const mockEmployees: Employee[] = [
   { id: 1001, emp_id: 'EMP-1001', cpr: '890123456', name: 'Aisha Khan', designation: 'Site Supervisor', cost_center: 'CC-5001', phone: '+1 415 555 0101', status: 'active', nationality: 'Pakistan', joining_date: '2022-03-01', company: 'Workforce Ltd', department: 'Field Operations', office_shift: 'DAY', ot_eligible: 'YES', cr_name: null, cr_number: null, reporting_manager: 'YUKI TANAKA', zk_is_active: true, zk_hire_date: '2022-03-01', created_at: '2026-07-14T08:42:00Z' },
@@ -71,10 +71,16 @@ export const mockAttendanceRecords: AttendanceRecord[] = attendanceBase.map((r, 
 }));
 
 export const mockTasks: Task[] = [
-  { id: 701, emp_id: 'EMP-1001', employee_name: 'Aisha Khan', task_date: '2026-07-16', start_time: '09:00', end_time: '11:00', location: 'Downtown HQ Refit', description: 'Inspect scaffolding on level 3', priority: 'high', remarks: 'Bring PPE checklist', status: 'pending', source: 'admin_portal', teams_message_id: null, created_at: '2026-07-15T09:00:00Z' },
-  { id: 702, emp_id: 'EMP-1003', employee_name: 'Priya Nair', task_date: '2026-07-16', start_time: null, end_time: null, location: 'Downtown HQ Refit', description: 'Cable routing punch list', priority: 'medium', remarks: null, status: 'pending', source: 'teams', teams_message_id: 'msg-2201', created_at: '2026-07-15T10:30:00Z' },
-  { id: 703, emp_id: 'EMP-1006', employee_name: 'Tom Whitfield', task_date: '2026-07-15', start_time: '13:00', end_time: '15:00', location: 'South Depot Logistics', description: 'Delivery route confirmation', priority: 'low', remarks: null, status: 'completed', source: 'admin_portal', teams_message_id: null, created_at: '2026-07-14T08:15:00Z' },
-  { id: 704, emp_id: 'EMP-1016', employee_name: 'Devon Reed', task_date: '2026-07-14', start_time: null, end_time: null, location: 'East Facility Maintenance', description: 'HVAC filter replacement', priority: 'medium', remarks: 'Order parts in advance', status: 'completed', source: 'teams', teams_message_id: 'msg-2188', created_at: '2026-07-13T14:00:00Z' },
+  { id: 701, emp_id: 'EMP-1001', employee_name: 'Aisha Khan', task_date: '2026-07-16', project_code: 1, project_name: 'Downtown HQ Refit', start_time: '09:00', end_time: '11:00', location: 'Downtown HQ Refit', description: 'Inspect scaffolding on level 3', priority: 'high', remarks: 'Bring PPE checklist', status: 'pending', source: 'admin_portal', teams_message_id: null, created_at: '2026-07-15T09:00:00Z' },
+  { id: 702, emp_id: 'EMP-1003', employee_name: 'Priya Nair', task_date: '2026-07-16', project_code: 1, project_name: 'Downtown HQ Refit', start_time: null, end_time: null, location: 'Downtown HQ Refit', description: 'Cable routing punch list', priority: 'medium', remarks: null, status: 'pending', source: 'teams', teams_message_id: 'msg-2201', created_at: '2026-07-15T10:30:00Z' },
+  { id: 703, emp_id: 'EMP-1006', employee_name: 'Tom Whitfield', task_date: '2026-07-15', project_code: 2, project_name: 'North Depot Logistics', start_time: '13:00', end_time: '15:00', location: 'South Depot Logistics', description: 'Delivery route confirmation', priority: 'low', remarks: null, status: 'completed', source: 'admin_portal', teams_message_id: null, created_at: '2026-07-14T08:15:00Z' },
+  { id: 704, emp_id: 'EMP-1016', employee_name: 'Devon Reed', task_date: '2026-07-14', project_code: 3, project_name: 'East Facility Maintenance', start_time: null, end_time: null, location: 'East Facility Maintenance', description: 'HVAC filter replacement', priority: 'medium', remarks: 'Order parts in advance', status: 'completed', source: 'teams', teams_message_id: 'msg-2188', created_at: '2026-07-13T14:00:00Z' },
+];
+
+export const mockProjects: Project[] = [
+  { project_code: 1, project_name: 'Downtown HQ Refit', project_company_name: 'Workforce Ltd' },
+  { project_code: 2, project_name: 'North Depot Logistics', project_company_name: 'Workforce Ltd' },
+  { project_code: 3, project_name: 'East Facility Maintenance', project_company_name: 'Workforce Ltd' },
 ];
 
 export const mockExceptions: Exception[] = [
