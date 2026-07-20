@@ -2,11 +2,11 @@ const cron = require('node-cron');
 
 const pool = require('../config/db');
 const { getChannelMessages, getUserEmail, replyToMessage } = require('../services/graphClient');
-const { parseTaskTemplate } = require('../services/teamsTaskParser');
+const { parseTaskRows } = require('../services/teamsTaskParser');
+const { createTaskRowsFromFields } = require('../services/taskRowValidation');
 
 const TEAM_ID = process.env.TEAMS_TEAM_ID;
 const CHANNEL_ID = process.env.TEAMS_CHANNEL_ID;
-const ALLOWED_PRIORITIES = ['low', 'medium', 'high'];
 
 async function getSetting(key) {
   const { rows } = await pool.query('SELECT value FROM sync_settings WHERE key = $1', [key]);
@@ -19,6 +19,11 @@ async function setSetting(key, value) {
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
     [key, value]
   );
+}
+
+function buildFailureReply(failed) {
+  const lines = failed.map((f) => `Row ${f.row}: ${f.reason}`);
+  return `${failed.length} row${failed.length === 1 ? '' : 's'} could not be imported:\n${lines.join('\n')}`;
 }
 
 async function processOneMessage(message, authorizedSender, summary) {
@@ -36,75 +41,48 @@ async function processOneMessage(message, authorizedSender, summary) {
 
   const bodyContent = message.body?.content || '';
   const isHtml = message.body?.contentType === 'html';
-  const parsed = parseTaskTemplate(bodyContent, isHtml);
-  if (!parsed.matchesTemplate) {
-    summary.ignoredTemplate += 1;
+  const rows = parseTaskRows(bodyContent, isHtml);
+  if (!rows) {
+    summary.ignoredNotAPaste += 1;
     return;
   }
 
-  const { date, empId, location, description, priority, remarks } = parsed.fields;
-  const errors = [];
+  summary.rowsTotal += rows.length;
+  const failed = [];
 
-  let employee = null;
-  if (!empId) {
-    errors.push('Employee ID is empty');
-  } else {
-    const empResult = await pool.query('SELECT id, emp_id FROM employees WHERE emp_id = $1 AND status = $2', [
-      empId,
-      'active',
-    ]);
-    employee = empResult.rows[0] || null;
-    if (!employee) errors.push(`Employee ID '${empId}' not found or not active`);
-  }
-
-  const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(new Date(date).getTime());
-  if (!dateValid) {
-    errors.push(`Invalid date '${date}' (expected YYYY-MM-DD)`);
-  }
-
-  if (!description) {
-    errors.push('Task Description is empty');
-  }
-
-  const normalizedPriority = (priority || '').toLowerCase();
-  if (!ALLOWED_PRIORITIES.includes(normalizedPriority)) {
-    errors.push(`Invalid priority '${priority}' (expected low, medium, or high)`);
-  }
-
-  if (employee && dateValid) {
-    const existing = await pool.query('SELECT id FROM tasks WHERE emp_id = $1 AND task_date = $2', [empId, date]);
-    if (existing.rows[0]) {
-      errors.push(`A task already exists for employee '${empId}' on ${date}`);
+  for (let i = 0; i < rows.length; i += 1) {
+    const rowNumber = i + 1;
+    try {
+      await createTaskRowsFromFields(rows[i], 'teams', message.id);
+      summary.rowsSucceeded += 1;
+    } catch (err) {
+      failed.push({ row: rowNumber, reason: err.message });
+      await pool.query('INSERT INTO exceptions (type, emp_id, details) VALUES ($1, $2, $3)', [
+        'teams_task_validation_failed',
+        rows[i].empId || null,
+        `Row ${rowNumber}: ${err.message}`,
+      ]);
     }
   }
 
-  if (errors.length > 0) {
-    await pool.query('INSERT INTO exceptions (type, emp_id, ref_table, ref_id, details) VALUES ($1, $2, $3, $4, $5)', [
-      'teams_task_validation_failed',
-      empId || null,
-      employee ? 'employees' : null,
-      employee ? employee.id : null,
-      errors.join('; '),
-    ]);
-    summary.failed += 1;
+  summary.rowsFailed += failed.length;
 
-    await replyToMessage(TEAM_ID, CHANNEL_ID, message.id, `Task could not be created: ${errors.join('; ')}`).catch(
-      (err) => console.error('teamsTaskProcessor: failed to post reply', err.message)
+  if (failed.length > 0) {
+    await replyToMessage(TEAM_ID, CHANNEL_ID, message.id, buildFailureReply(failed)).catch((err) =>
+      console.error('teamsTaskProcessor: failed to post reply', err.message)
     );
-
-    return;
   }
-
-  await pool.query(
-    `INSERT INTO tasks (emp_id, task_date, location, description, priority, remarks, source, teams_message_id)
-     VALUES ($1, $2, $3, $4, $5, $6, 'teams', $7)`,
-    [empId, date, location || null, description, normalizedPriority, remarks || null, message.id]
-  );
-  summary.created += 1;
 }
 
 async function processTeamsTasks() {
-  const summary = { fetched: 0, ignoredSender: 0, ignoredTemplate: 0, created: 0, failed: 0 };
+  const summary = {
+    fetched: 0,
+    ignoredSender: 0,
+    ignoredNotAPaste: 0,
+    rowsTotal: 0,
+    rowsSucceeded: 0,
+    rowsFailed: 0,
+  };
 
   const authorizedSender = await getSetting('teams_authorized_sender');
   if (!authorizedSender) {
@@ -136,7 +114,6 @@ async function processTeamsTasks() {
       await processOneMessage(message, authorizedSender, summary);
     } catch (err) {
       console.error(`teamsTaskProcessor: error processing message ${message.id}`, err.message);
-      summary.failed += 1;
     }
   }
 
