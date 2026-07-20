@@ -13,6 +13,8 @@ const attendanceRoutes = require('./routes/attendance');
 const exceptionsRoutes = require('./routes/exceptions');
 const tasksRoutes = require('./routes/tasks');
 const projectsRoutes = require('./routes/projects');
+const otRequestsRoutes = require('./routes/otRequests');
+const otApprovalPageRoutes = require('./routes/otApprovalPage');
 const geofenceMonitor = require('./jobs/geofenceMonitor');
 const teamsTaskProcessor = require('./jobs/teamsTaskProcessor');
 
@@ -21,6 +23,7 @@ const app = express();
 app.use(cors());
 app.use(helmet());
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -47,6 +50,10 @@ app.use('/api/attendance', requireAuth, attendanceRoutes);
 app.use('/api/exceptions', requireAuth, exceptionsRoutes);
 app.use('/api/tasks', requireAuth, tasksRoutes);
 app.use('/api/projects', requireAuth, projectsRoutes);
+app.use('/api/ot-requests', requireAuth, otRequestsRoutes);
+
+// Deliberately outside /api and requireAuth — see otApprovalPage.js.
+app.use('/ot-requests', otApprovalPageRoutes);
 
 const PORT = process.env.PORT || 5000;
 

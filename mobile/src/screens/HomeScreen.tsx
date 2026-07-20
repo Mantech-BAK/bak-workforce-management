@@ -1,15 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import * as Location from 'expo-location';
 import {
   type EmployeeMe,
+  type OtRequestWindow,
   type PunchStatus,
   getMe,
+  getOtRequestWindow,
   getPunchStatus,
   getTodayTaskCount,
+  isOtEligible,
   punchIn,
   punchOut,
   reportLocation,
+  submitOtRequest,
 } from '../api';
 
 const LOCATION_REPORT_INTERVAL_MS = 75000;
@@ -37,6 +52,18 @@ async function captureLocation(): Promise<{ lat: number; lng: number } | null> {
   return { lat: position.coords.latitude, lng: position.coords.longitude };
 }
 
+function timeStringToMinutes(str: string): number {
+  const [h, m] = str.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function isNowWithinWindow(window: OtRequestWindow | null): boolean {
+  if (!window) return false;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return nowMinutes >= timeStringToMinutes(window.start) && nowMinutes < timeStringToMinutes(window.end);
+}
+
 export default function HomeScreen({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [me, setMe] = useState<EmployeeMe | null>(null);
   const [punch, setPunch] = useState<PunchStatus | null>(null);
@@ -44,12 +71,18 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [otWindow, setOtWindow] = useState<OtRequestWindow | null>(null);
+  const [showOtModal, setShowOtModal] = useState(false);
+  const [otHours, setOtHours] = useState('');
+  const [otReason, setOtReason] = useState('');
+  const [otSubmitting, setOtSubmitting] = useState(false);
 
   const load = useCallback(async () => {
-    const [meData, punchData, tasksData] = await Promise.all([
+    const [meData, punchData, tasksData, windowData] = await Promise.all([
       getMe(token),
       getPunchStatus(token),
       getTodayTaskCount(token),
+      getOtRequestWindow(token),
     ]);
 
     if (!meData) {
@@ -60,6 +93,7 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
     setMe(meData);
     setPunch(punchData);
     setTaskCount(tasksData?.count ?? 0);
+    setOtWindow(windowData);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -120,6 +154,30 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
     await load();
   };
 
+  const handleSubmitOtRequest = async () => {
+    const hours = Number(otHours);
+    if (!otHours || !Number.isFinite(hours) || hours <= 0) {
+      Alert.alert('Request OT', 'Enter a valid number of hours.');
+      return;
+    }
+    const maxHours = otWindow?.maxHours ?? 10;
+    if (hours > maxHours) {
+      Alert.alert('Request OT', `OT requests cannot exceed ${maxHours} hours. This is a hard policy cap.`);
+      return;
+    }
+    setOtSubmitting(true);
+    const result = await submitOtRequest(token, { hours_requested: hours, reason: otReason.trim() });
+    setOtSubmitting(false);
+    if (!result.ok) {
+      Alert.alert('Request Failed', result.error);
+      return;
+    }
+    setShowOtModal(false);
+    setOtHours('');
+    setOtReason('');
+    Alert.alert('OT Requested', 'Your overtime request has been sent for approval.');
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -129,6 +187,8 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
   }
 
   const canPunchIn = punch?.status !== 'clocked_in';
+  const otEligible = isOtEligible(me?.ot_eligible ?? null);
+  const otWindowOpen = isNowWithinWindow(otWindow);
 
   return (
     <ScrollView
@@ -169,9 +229,69 @@ export default function HomeScreen({ token, onLogout }: { token: string; onLogou
         </TouchableOpacity>
       )}
 
+      {otEligible && (
+        <TouchableOpacity
+          style={[styles.otButton, !otWindowOpen && styles.buttonDisabled]}
+          onPress={() => setShowOtModal(true)}
+          disabled={!otWindowOpen}
+        >
+          <Text style={styles.otButtonText}>
+            {otWindowOpen ? 'Request OT' : `Request OT (opens ${otWindow?.start ?? ''})`}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
+
+      <Modal visible={showOtModal} transparent animationType="fade" onRequestClose={() => setShowOtModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Request Overtime</Text>
+
+            <Text style={styles.modalLabel}>Hours Requested (max {otWindow?.maxHours ?? 10})</Text>
+            <TextInput
+              value={otHours}
+              onChangeText={setOtHours}
+              keyboardType="numeric"
+              placeholder="e.g. 3"
+              style={styles.modalInput}
+            />
+
+            <Text style={styles.modalLabel}>Reason</Text>
+            <TextInput
+              value={otReason}
+              onChangeText={setOtReason}
+              placeholder="Why is OT needed?"
+              multiline
+              numberOfLines={3}
+              style={[styles.modalInput, styles.modalTextArea]}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowOtModal(false)}
+                disabled={otSubmitting}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSubmitButton, otSubmitting && styles.buttonDisabled]}
+                onPress={handleSubmitOtRequest}
+                disabled={otSubmitting}
+              >
+                {otSubmitting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalSubmitText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -200,6 +320,50 @@ const styles = StyleSheet.create({
   punchOutButton: { backgroundColor: '#dc2626' },
   buttonDisabled: { opacity: 0.5 },
   punchButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  otButton: {
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 12,
+    backgroundColor: '#7c3aed',
+  },
+  otButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   logoutButton: { marginTop: 24, alignItems: 'center', padding: 12 },
   logoutText: { color: '#dc2626', fontWeight: '600' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 20,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16 },
+  modalLabel: { fontSize: 12, color: '#6b7280', textTransform: 'uppercase', fontWeight: '600', marginBottom: 6 },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 15,
+    marginBottom: 14,
+  },
+  modalTextArea: { minHeight: 70, textAlignVertical: 'top' },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  modalCancelButton: { paddingVertical: 10, paddingHorizontal: 16 },
+  modalCancelText: { color: '#6b7280', fontWeight: '600' },
+  modalSubmitButton: {
+    backgroundColor: '#7c3aed',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSubmitText: { color: '#fff', fontWeight: '600' },
 });

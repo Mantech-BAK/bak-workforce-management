@@ -104,8 +104,7 @@ async function queryAttendanceDayGroups({ empId, siteId, dateFrom, dateTo } = {}
        e.cost_center,
        e.ot_eligible,
        (a.punch_in_time::date) AS day,
-       MIN(a.punch_in_time) AS punch_in_time,
-       SUM(COALESCE(a.ot_hours, 0)) AS ot_hours
+       MIN(a.punch_in_time) AS punch_in_time
      FROM attendance a
      JOIN employees e ON e.emp_id = a.emp_id
      ${where}
@@ -117,17 +116,22 @@ async function queryAttendanceDayGroups({ empId, siteId, dateFrom, dateTo } = {}
   return rows;
 }
 
-async function lookupOtApprover(costCenter, otHours) {
-  if (!otHours) return null;
+// The only OT figure the Confirmation Sheet trusts: an approved pre-shift OT
+// request for that exact employee/day. attendance.ot_hours is never populated by
+// any process in this system, so it's not used here — OT time that was never
+// requested-and-approved simply doesn't count, per the OT request/approval flow.
+// Sums hours_requested across approved requests in the rare case more than one
+// exists for the same day, rather than silently dropping any of them.
+async function fetchApprovedOt(empId, dayString) {
   const { rows } = await pool.query(
-    `SELECT approver_name
-     FROM ot_approval_tiers
-     WHERE min_ot_hours <= $1 AND (cost_center = $2 OR cost_center IS NULL)
-     ORDER BY (cost_center IS NOT NULL) DESC, min_ot_hours DESC
-     LIMIT 1`,
-    [otHours, costCenter]
+    `SELECT SUM(hours_requested) AS total_hours, MAX(tier_approver) AS tier_approver
+     FROM ot_requests
+     WHERE emp_id = $1 AND request_date = $2 AND status = 'approved'`,
+    [empId, dayString]
   );
-  return rows[0]?.approver_name || null;
+  const row = rows[0];
+  const totalHours = Number(row?.total_hours) || 0;
+  return { otHours: totalHours, approver: totalHours > 0 ? row.tier_approver : null };
 }
 
 async function fetchDayTasks(empId, dayString) {
@@ -216,8 +220,7 @@ async function shapeRows(dayGroups) {
     const dayTasks = await fetchDayTasks(group.emp_id, dayString);
     const { timedRows, timelessRows } = buildDayTimeline(dayTasks, punchIn, shiftEnd);
 
-    const otHours = Number(group.ot_hours) || 0;
-    const approver = await lookupOtApprover(group.cost_center, otHours);
+    const { otHours, approver } = await fetchApprovedOt(group.emp_id, dayString);
 
     const lastTimedIndex = timedRows.length - 1;
 

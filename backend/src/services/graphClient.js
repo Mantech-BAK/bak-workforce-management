@@ -80,4 +80,27 @@ async function replyToMessage(teamId, channelId, messageId, contentText) {
   });
 }
 
-module.exports = { getAccessToken, graphFetch, getUserEmail, getChannelMessages, replyToMessage };
+// App-only auth has no signed-in user, so /me/sendMail isn't available — mail is sent
+// as a specific real mailbox in the tenant via /users/{mailbox}/sendMail instead.
+// PENDING: confirmed live that this app registration has Mail.ReadWrite but not
+// Mail.Send, which this endpoint actually requires (403 ErrorAccessDenied). Needs a
+// tenant admin to grant Mail.Send — same class of gap as Teams' ChannelMessage.Read.All.
+async function sendMail(toEmail, subject, htmlBody) {
+  const sender = process.env.GRAPH_SENDER_EMAIL;
+  if (!sender) {
+    throw new Error('GRAPH_SENDER_EMAIL is not configured');
+  }
+  return graphFetch(`/users/${encodeURIComponent(sender)}/sendMail`, {
+    method: 'POST',
+    body: JSON.stringify({
+      message: {
+        subject,
+        body: { contentType: 'HTML', content: htmlBody },
+        toRecipients: [{ emailAddress: { address: toEmail } }],
+      },
+      saveToSentItems: false,
+    }),
+  });
+}
+
+module.exports = { getAccessToken, graphFetch, getUserEmail, getChannelMessages, replyToMessage, sendMail };

@@ -72,6 +72,7 @@ export interface EmployeeMe {
   name: string;
   designation: string | null;
   department: string | null;
+  ot_eligible: string | null;
 }
 
 export function getMe(token: string): Promise<EmployeeMe | null> {
@@ -214,4 +215,40 @@ export function reportLocation(
   params: { lat: number; lng: number }
 ): Promise<ApiSuccess<{ ok: true }> | ApiFailure> {
   return authedPost<{ ok: true }>('/api/attendance/location', token, params);
+}
+
+// Same rule as the backend's isOtEligibleValue in otRequests.js — any non-blank value
+// other than 'NO' counts as eligible. Provisional pending the corrected Excel data
+// upload; the backend is the real gate regardless, this only controls button visibility.
+export function isOtEligible(otEligible: string | null): boolean {
+  const v = (otEligible ?? '').trim().toUpperCase();
+  return v !== '' && v !== 'NO';
+}
+
+export interface OtRequestWindow {
+  start: string;
+  end: string;
+  maxHours: number;
+}
+
+export function getOtRequestWindow(token: string): Promise<OtRequestWindow | null> {
+  return authedGet<OtRequestWindow>('/api/ot-requests/window', token);
+}
+
+export interface OtRequest {
+  id: number;
+  emp_id: string;
+  hours_requested: string;
+  reason: string | null;
+  request_date: string;
+  tier_approver: string | null;
+  status: string;
+  requested_at: string;
+}
+
+export function submitOtRequest(
+  token: string,
+  params: { hours_requested: number; reason: string }
+): Promise<ApiSuccess<OtRequest> | ApiFailure> {
+  return authedPost<OtRequest>('/api/ot-requests', token, params);
 }
