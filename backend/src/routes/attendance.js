@@ -11,8 +11,42 @@ const {
 const { buildExcelBuffer } = require('../services/excelExport');
 const { buildCsv } = require('../services/csvExport');
 const { buildPdfBuffer } = require('../services/pdfExport');
+const { getWorkScheduleSettings, minutesSinceMidnight, formatMinutes } = require('../services/workScheduleSettings');
 
 const router = express.Router();
+
+async function createException(type, empId, attendanceId, details) {
+  await pool.query(
+    `INSERT INTO exceptions (type, emp_id, ref_table, ref_id, details) VALUES ($1, $2, 'attendance', $3, $4)`,
+    [type, empId, attendanceId, details]
+  );
+}
+
+async function checkLatePunchIn(empId, attendanceId, punchInTime) {
+  const settings = await getWorkScheduleSettings();
+  const punchMinutes = minutesSinceMidnight(new Date(punchInTime));
+  if (punchMinutes > settings.latePunchInCutoffMinutes) {
+    await createException(
+      'late_punch_in',
+      empId,
+      attendanceId,
+      `Punched in at ${formatMinutes(punchMinutes)} (cutoff ${formatMinutes(settings.latePunchInCutoffMinutes)})`
+    );
+  }
+}
+
+async function checkEarlyPunchOut(empId, attendanceId, punchOutTime) {
+  const settings = await getWorkScheduleSettings();
+  const punchMinutes = minutesSinceMidnight(new Date(punchOutTime));
+  if (punchMinutes < settings.shiftEndMinutes) {
+    await createException(
+      'early_punch_out',
+      empId,
+      attendanceId,
+      `Punched out at ${formatMinutes(punchMinutes)} (shift end ${formatMinutes(settings.shiftEndMinutes)})`
+    );
+  }
+}
 
 router.get('/me/status', async (req, res) => {
   if (!req.employee) {
@@ -69,9 +103,11 @@ router.post('/punch-in', async (req, res) => {
   const { rows } = await pool.query(
     `INSERT INTO attendance (emp_id, cpr, punch_in_time, punch_in_lat, punch_in_lng, geofence_id, source)
      VALUES ($1, $2, now(), $3, $4, $5, 'mobile_app')
-     RETURNING punch_in_time`,
+     RETURNING id, punch_in_time`,
     [req.employee.emp_id, employee.rows[0]?.cpr || null, lat, lng, geofence.rows[0].id]
   );
+
+  await checkLatePunchIn(req.employee.emp_id, rows[0].id, rows[0].punch_in_time);
 
   res.json({ status: 'clocked_in', punch_in_time: rows[0].punch_in_time });
 });
@@ -128,13 +164,15 @@ router.post('/punch-out', async (req, res) => {
     [lat, lng, open.rows[0].id]
   );
 
+  await checkEarlyPunchOut(req.employee.emp_id, open.rows[0].id, rows[0].punch_out_time);
+
   res.json({ status: 'clocked_out', punch_in_time: rows[0].punch_in_time, punch_out_time: rows[0].punch_out_time });
 });
 
 async function respond(req, res, filters) {
   const format = String(req.query.format || 'json').toLowerCase();
   const rawRows = await queryAttendance(filters);
-  const rows = shapeRows(rawRows);
+  const rows = await shapeRows(rawRows);
 
   if (format === 'json') {
     return res.json(rows);

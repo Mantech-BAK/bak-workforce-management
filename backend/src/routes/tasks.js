@@ -196,9 +196,18 @@ router.patch('/:id/status', async (req, res) => {
     return res.status(400).json({ error: 'Task is not due yet' });
   }
 
+  // actual_start_time/actual_end_time track real work-session times (as opposed to
+  // start_time/end_time, the admin-planned schedule) for the Confirmation Sheet.
+  const actualTimeUpdate =
+    status === 'in_progress'
+      ? ', actual_start_time = now()'
+      : status === 'completed' || status === 'cannot_complete'
+        ? ', actual_end_time = now()'
+        : '';
+
   const { rows } = await pool.query(
-    `UPDATE tasks SET status = $1 WHERE id = $2
-     RETURNING id, emp_id, task_date, start_time, end_time, location, description, priority, remarks, status, source, teams_message_id, created_at`,
+    `UPDATE tasks SET status = $1${actualTimeUpdate} WHERE id = $2
+     RETURNING id, emp_id, task_date, start_time, end_time, actual_start_time, actual_end_time, location, description, priority, remarks, status, source, teams_message_id, created_at`,
     [status, req.params.id]
   );
 
@@ -218,9 +227,15 @@ router.post('/:id/reschedule-tomorrow', async (req, res) => {
     return res.status(404).json({ error: 'Task not found' });
   }
 
+  // Clears actual_start_time/actual_end_time rather than preserving them: this row's
+  // task_date is moving forward, so yesterday's work-session stamps would otherwise
+  // masquerade as today's if the task gets restarted, corrupting that day's
+  // Confirmation Sheet gap-fill. The partial time already worked still counts toward
+  // the old day's total hours (folded into Default Work once this row no longer
+  // matches that day's task_date) — it just loses this specific task's attribution.
   const { rows } = await pool.query(
-    `UPDATE tasks SET task_date = task_date + 1, status = 'pending' WHERE id = $1
-     RETURNING id, emp_id, task_date, start_time, end_time, location, description, priority, remarks, status, source, teams_message_id, created_at`,
+    `UPDATE tasks SET task_date = task_date + 1, status = 'pending', actual_start_time = NULL, actual_end_time = NULL WHERE id = $1
+     RETURNING id, emp_id, task_date, start_time, end_time, actual_start_time, actual_end_time, location, description, priority, remarks, status, source, teams_message_id, created_at`,
     [req.params.id]
   );
 
