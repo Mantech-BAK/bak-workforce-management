@@ -60,7 +60,7 @@ router.post('/face-login', async (req, res) => {
   const imageBuffer = Buffer.from(face_image, 'base64');
   let descriptor;
   try {
-    descriptor = await getFaceDescriptor(imageBuffer);
+    descriptor = await getFaceDescriptor(imageBuffer, emp_id);
   } catch (err) {
     return res.status(400).json({ error: 'Invalid image data' });
   }
