@@ -154,7 +154,16 @@ async function fetchDayTasks(empId, dayString) {
 // actual_end_time — one that was never started (or is still in progress, with no
 // actual_end_time yet) contributes no time block at all, and its span is simply
 // absorbed into whatever Default Work gap surrounds it.
-function buildDayTimeline(dayTasks, punchIn, shiftEnd) {
+//
+// The gap-fill boundary is min(shiftEnd, now), not shiftEnd alone: for a day that
+// hasn't closed yet (today, before shift end), extending Default Work all the way to
+// shiftEnd would lock in time that hasn't happened — an admin could still assign a
+// real task into that remaining window before the shift genuinely ends. Gaps between
+// tasks that have already occurred are unaffected (task times are always <= now,
+// since actual_start_time/actual_end_time are only ever stamped in real time), so
+// only the trailing gap after the last task (or after punch-in, if there are no
+// tasks yet) is subject to this cap.
+function buildDayTimeline(dayTasks, punchIn, shiftEnd, now) {
   const timed = [];
   const timeless = [];
 
@@ -194,8 +203,9 @@ function buildDayTimeline(dayTasks, punchIn, shiftEnd) {
     if (clippedEnd > cursor) cursor = clippedEnd;
   }
 
-  if (cursor < shiftEnd) {
-    rows.push({ start: cursor, end: shiftEnd, job: 'Default Work', projectName: 'Default Work', remarks: '' });
+  const effectiveEnd = shiftEnd < now ? shiftEnd : now;
+  if (cursor < effectiveEnd) {
+    rows.push({ start: cursor, end: effectiveEnd, job: 'Default Work', projectName: 'Default Work', remarks: '' });
   }
 
   return { timedRows: rows, timelessRows: timeless };
@@ -209,6 +219,7 @@ function buildDayTimeline(dayTasks, punchIn, shiftEnd) {
 // across every row for the same day.
 async function shapeRows(dayGroups) {
   const settings = await getWorkScheduleSettings();
+  const now = new Date();
   const out = [];
 
   for (const group of dayGroups) {
@@ -218,7 +229,7 @@ async function shapeRows(dayGroups) {
     const shiftEnd = combineDateAndTime(dayDate, settings.shiftEndTime);
 
     const dayTasks = await fetchDayTasks(group.emp_id, dayString);
-    const { timedRows, timelessRows } = buildDayTimeline(dayTasks, punchIn, shiftEnd);
+    const { timedRows, timelessRows } = buildDayTimeline(dayTasks, punchIn, shiftEnd, now);
 
     const { otHours, approver } = await fetchApprovedOt(group.emp_id, dayString);
 
